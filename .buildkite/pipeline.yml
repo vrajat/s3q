@@ -1,0 +1,12 @@
+steps:
+  - label: ":rust: cargo fmt"
+    command: "cargo fmt --all -- --check"
+
+  - label: ":rust: cargo test"
+    command: "cargo test"
+
+  - label: ":python: compile"
+    command: "python3 -m compileall python"
+
+  - label: ":docs: smoke"
+    command: "test -f mkdocs.yml && test -f docs/index.md && test -f engg/product-requirements.md"

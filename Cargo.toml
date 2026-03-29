@@ -1,0 +1,20 @@
+[package]
+name = "s3q"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "S3-backed queue and durable workflow primitives"
+homepage = "https://s3q.dev"
+repository = "https://github.com/vrajat/s3q"
+readme = "README.md"
+keywords = ["s3", "queue", "workflow", "durable-execution"]
+categories = ["asynchronous", "api-bindings"]
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+pgqrs-integration = []
+
+[dependencies]

@@ -1,0 +1,35 @@
+site_name: s3q
+site_url: https://s3q.dev
+site_description: S3-backed queue plus durable workflows built on pgqrs
+repo_url: https://github.com/vrajat/s3q
+repo_name: vrajat/s3q
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - user-guide/index.md
+      - Queue Model: user-guide/concepts/queue-model.md
+      - Workflow Model: user-guide/concepts/workflow-model.md
+      - Quickstart: user-guide/getting-started/quickstart.md
+  - Development:
+      - development/index.md
+      - Contributing: development/contributing.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
