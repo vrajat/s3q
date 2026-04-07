@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    config::ClientConfig, inspect::Inspect, pgqrs_adapter::PgqrsAdapter, queue::QueueHandle, Result,
+    backend::Backend, config::ClientConfig, inspect::Inspect, queue::Queue, QueueInfo, Result,
 };
 
 #[derive(Debug, Clone)]
@@ -11,7 +11,7 @@ use crate::{
 /// inspection handles.
 pub struct Client {
     config: ClientConfig,
-    adapter: Arc<PgqrsAdapter>,
+    backend: Arc<Backend>,
 }
 
 impl Client {
@@ -25,8 +25,8 @@ impl Client {
 
     /// Connect to s3q using an explicit client configuration.
     pub async fn connect_with_config(config: ClientConfig) -> Result<Self> {
-        let adapter = PgqrsAdapter::connect(&config).await?;
-        Ok(Self { config, adapter })
+        let backend = Backend::connect(&config).await?;
+        Ok(Self { config, backend })
     }
 
     /// Return the configuration used by this client.
@@ -34,12 +34,30 @@ impl Client {
         &self.config
     }
 
-    /// Return a handle for a queue name.
+    /// Create a queue.
+    pub async fn create_queue(&self, name: impl AsRef<str>) -> Result<QueueInfo> {
+        self.backend.create_queue(name.as_ref()).await
+    }
+
+    /// Delete a queue.
     ///
-    /// This does not create the queue. Call [`QueueHandle::create_queue`] when
-    /// provisioning a new queue.
-    pub fn queue(&self, name: impl Into<String>) -> QueueHandle {
-        QueueHandle::new(self.adapter.clone(), name, self.config.namespace.clone())
+    /// Deletion fails if the backing queue still has messages or associated
+    /// workers that prevent safe deletion.
+    pub async fn delete_queue(&self, name: impl AsRef<str>) -> Result<()> {
+        self.backend.delete_queue(name.as_ref()).await
+    }
+
+    /// Purge messages from a queue while keeping the queue itself.
+    pub async fn purge_queue(&self, name: impl AsRef<str>) -> Result<()> {
+        self.backend.purge_queue(name.as_ref()).await
+    }
+
+    /// Return a queue handle for a queue name.
+    ///
+    /// This does not create the queue. Call [`Client::create_queue`] when
+    /// provisioning queues.
+    pub fn queue(&self, name: impl Into<String>) -> Queue {
+        Queue::new(self.backend.clone(), name, self.config.namespace.clone())
     }
 
     /// Return a read-only inspection handle.

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .queue import QueueHandle
+from .queue import Queue
 from .workflow import WorkflowHandle
+from .errors import NotReadyError
 
 
 @dataclass(slots=True)
@@ -37,9 +38,24 @@ class Client:
         """Return the client configuration."""
         return self._config
 
-    def queue(self, name: str) -> QueueHandle:
+    def create_queue(self, name: str) -> None:
+        """Create a queue."""
+        _ = name
+        raise NotReadyError("client.create_queue is not wired to the Rust core yet")
+
+    def delete_queue(self, name: str) -> None:
+        """Delete a queue."""
+        _ = name
+        raise NotReadyError("client.delete_queue is not wired to the Rust core yet")
+
+    def purge_queue(self, name: str) -> None:
+        """Purge messages from a queue."""
+        _ = name
+        raise NotReadyError("client.purge_queue is not wired to the Rust core yet")
+
+    def queue(self, name: str) -> Queue:
         """Return a queue handle for a queue name."""
-        return QueueHandle(client=self, name=name)
+        return Queue(client=self, name=name)
 
     def workflow(self, name: str) -> WorkflowHandle:
         """Return a workflow handle scaffold.

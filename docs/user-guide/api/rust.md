@@ -20,14 +20,11 @@ let config = s3q::ClientConfig::new("s3://my-bucket/queues/app.db")
 let client = s3q::Client::connect_with_config(config).await?;
 ```
 
-## QueueHandle
+## Queue
 
 ```rust
+client.create_queue("emails").await?;
 let queue = client.queue("emails");
-
-queue.create_queue().await?;
-queue.purge_queue().await?;
-queue.delete_queue().await?;
 ```
 
 Create producers and consumers from the queue:

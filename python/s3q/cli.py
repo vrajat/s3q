@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "queue" and args.queue_command == "create":
             client = Client.connect(args.dsn)
-            client.queue(args.name).create_queue()
+            client.create_queue(args.name)
             return 0
 
         if args.command == "workflow" and args.workflow_command == "start":

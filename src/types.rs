@@ -9,25 +9,16 @@ const RECEIPT_PREFIX: &str = "s3q1";
 ///
 /// Receipt handles are returned by `read` and `read_batch` and are required to
 /// archive, delete, or update visibility for a leased message.
-pub struct ReceiptHandle(String);
+pub struct ReceiptHandle {
+    message_id: i64,
+    worker_id: i64,
+}
 
 impl ReceiptHandle {
-    /// Create a receipt handle from an opaque string.
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    /// Return the opaque string representation.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub(crate) fn from_parts(message_id: i64, worker_id: i64) -> Self {
-        Self::new(format!("{RECEIPT_PREFIX}:{message_id}:{worker_id}"))
-    }
-
-    pub(crate) fn decode(&self) -> Result<DecodedReceiptHandle> {
-        let mut parts = self.0.split(':');
+    /// Parse a receipt handle from its encoded string representation.
+    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value = value.as_ref();
+        let mut parts = value.split(':');
         let Some(prefix) = parts.next() else {
             return Err(Error::InvalidArgument("empty receipt handle".to_string()));
         };
@@ -46,38 +37,40 @@ impl ReceiptHandle {
             return Err(Error::InvalidArgument("invalid receipt handle".to_string()));
         }
 
-        Ok(DecodedReceiptHandle {
-            message_id: message_id.parse().map_err(|_| {
+        Ok(Self::from_parts(
+            message_id.parse().map_err(|_| {
                 Error::InvalidArgument("invalid message id in receipt handle".to_string())
             })?,
-            worker_id: worker_id.parse().map_err(|_| {
+            worker_id.parse().map_err(|_| {
                 Error::InvalidArgument("invalid worker id in receipt handle".to_string())
             })?,
-        })
+        ))
+    }
+
+    pub(crate) fn from_parts(message_id: i64, worker_id: i64) -> Self {
+        Self {
+            message_id,
+            worker_id,
+        }
+    }
+
+    pub(crate) fn message_id(&self) -> i64 {
+        self.message_id
+    }
+
+    pub(crate) fn worker_id(&self) -> i64 {
+        self.worker_id
+    }
+
+    /// Encode the receipt handle for storage or transport.
+    pub fn encode(&self) -> String {
+        format!("{RECEIPT_PREFIX}:{}:{}", self.message_id, self.worker_id)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct DecodedReceiptHandle {
-    pub message_id: i64,
-    pub worker_id: i64,
-}
-
-impl AsRef<str> for ReceiptHandle {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl From<String> for ReceiptHandle {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for ReceiptHandle {
-    fn from(value: &str) -> Self {
-        Self::new(value)
+impl std::fmt::Display for ReceiptHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.encode())
     }
 }
 

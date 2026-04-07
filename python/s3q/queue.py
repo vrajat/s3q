@@ -6,21 +6,13 @@ from .errors import NotReadyError
 
 
 @dataclass(slots=True)
-class QueueHandle:
+class Queue:
     """Queue-scoped Python API scaffold."""
 
     client: object
     """Client that created this queue handle."""
     name: str
     """Queue name."""
-
-    def create_queue(self) -> None:
-        """Create the queue."""
-        raise NotReadyError("queue.create_queue is not wired to the Rust core yet")
-
-    def delete_queue(self) -> None:
-        """Delete the queue."""
-        raise NotReadyError("queue.delete_queue is not wired to the Rust core yet")
 
     def send_message(self, payload: bytes | str) -> None:
         """Send one message payload."""

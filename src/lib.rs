@@ -5,11 +5,11 @@
 
 #![warn(missing_docs)]
 
+mod backend;
 mod client;
 mod config;
 mod error;
 mod inspect;
-mod pgqrs_adapter;
 mod queue;
 mod types;
 
@@ -20,5 +20,5 @@ pub use inspect::{
     GetMessageRequest, Inspect, ListArchivedMessagesRequest, ListMessagesRequest,
     ListQueuesRequest, MetricsAllRequest, MetricsRequest,
 };
-pub use queue::{Consumer, Producer, QueueHandle};
+pub use queue::{Consumer, Producer, Queue};
 pub use types::{ArchivedMessage, Message, MessageState, QueueInfo, QueueMetrics, ReceiptHandle};

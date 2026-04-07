@@ -10,7 +10,7 @@ Most applications only need a client, a queue, one or more producers, and one or
 ## The Basic Flow
 
 1. Connect with an S3 DSN such as `s3://my-bucket/queues/app.db`.
-2. Create a queue with `queue.create_queue()`.
+2. Create a queue with `client.create_queue("emails")`.
 3. Send messages through a named producer.
 4. Read messages through a named consumer.
 5. Archive or delete each leased message by using its receipt handle.

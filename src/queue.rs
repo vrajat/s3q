@@ -1,29 +1,28 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
 
-use crate::{pgqrs_adapter::PgqrsAdapter, types::ReceiptHandle, Message, QueueInfo, Result};
+use crate::{backend::Backend, types::ReceiptHandle, Error, Message, MessageState, Result};
 
 #[derive(Debug, Clone)]
 /// Queue-scoped handle.
 ///
-/// A queue handle creates queues and returns producer and consumer handles for
-/// a specific queue name.
-pub struct QueueHandle {
-    adapter: Arc<PgqrsAdapter>,
+/// A queue creates producer and consumer handles for a specific queue name.
+pub struct Queue {
+    backend: Arc<Backend>,
     name: String,
     namespace: String,
 }
 
-impl QueueHandle {
+impl Queue {
     pub(crate) fn new(
-        adapter: Arc<PgqrsAdapter>,
+        backend: Arc<Backend>,
         name: impl Into<String>,
         namespace: impl Into<String>,
     ) -> Self {
         Self {
-            adapter,
+            backend,
             name: name.into(),
             namespace: namespace.into(),
         }
@@ -34,36 +33,18 @@ impl QueueHandle {
         &self.name
     }
 
-    /// Return the namespace for this queue handle.
+    /// Return the namespace for this queue.
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
-    /// Create the queue.
-    pub async fn create_queue(&self) -> Result<QueueInfo> {
-        self.adapter.create_queue(&self.name).await
-    }
-
-    /// Delete the queue.
-    ///
-    /// Deletion fails if the backing queue still has messages or associated
-    /// workers that prevent safe deletion.
-    pub async fn delete_queue(&self) -> Result<()> {
-        self.adapter.delete_queue(&self.name).await
-    }
-
-    /// Purge messages from the queue while keeping the queue itself.
-    pub async fn purge_queue(&self) -> Result<()> {
-        self.adapter.purge_queue(&self.name).await
-    }
-
-    /// Create a managed producer handle for this queue.
+    /// Create a managed producer for this queue.
     ///
     /// Use a stable worker id so sent messages can be traced back to the
     /// producer during incident review.
     pub async fn producer(&self, worker_id: impl Into<String>) -> Result<Producer> {
         let worker_id = worker_id.into();
-        let producer = self.adapter.producer(&self.name, &worker_id).await?;
+        let producer = self.backend.producer(&self.name, &worker_id).await?;
 
         Ok(Producer {
             queue_name: self.name.clone(),
@@ -73,13 +54,13 @@ impl QueueHandle {
         })
     }
 
-    /// Create a managed consumer handle for this queue.
+    /// Create a managed consumer for this queue.
     ///
     /// Use a stable worker id so leased messages can be traced back to the
     /// consumer that owned them.
     pub async fn consumer(&self, worker_id: impl Into<String>) -> Result<Consumer> {
         let worker_id = worker_id.into();
-        let consumer = self.adapter.consumer(&self.name, &worker_id).await?;
+        let consumer = self.backend.consumer(&self.name, &worker_id).await?;
 
         Ok(Consumer {
             queue_name: self.name.clone(),
@@ -96,7 +77,7 @@ pub struct Producer {
     queue_name: String,
     namespace: String,
     worker_id: String,
-    producer: crate::pgqrs_adapter::Producer,
+    producer: pgqrs::Producer,
 }
 
 impl Producer {
@@ -117,7 +98,7 @@ impl Producer {
 
     /// Send one JSON payload immediately.
     pub async fn send(&self, payload: impl Into<Value>) -> Result<Message> {
-        self.producer.send(payload.into(), None).await
+        self.send_with_delay(payload.into(), Duration::ZERO).await
     }
 
     /// Send one JSON payload after a delay.
@@ -126,13 +107,21 @@ impl Producer {
         payload: impl Into<Value>,
         delay: Duration,
     ) -> Result<Message> {
-        self.producer.send(payload.into(), Some(delay)).await
+        self.send_with_delay(payload.into(), delay).await
+    }
+
+    async fn send_with_delay(&self, payload: Value, delay: Duration) -> Result<Message> {
+        let message = self
+            .producer
+            .enqueue_delayed(&payload, duration_secs_u32(delay)?)
+            .await?;
+        Ok(message_from_pgqrs(message, None))
     }
 
     /// Send multiple JSON payloads immediately.
     pub async fn send_batch(&self, payloads: impl Into<Vec<Value>>) -> Result<Vec<Message>> {
-        let payloads = payloads.into();
-        self.producer.send_batch(&payloads, None).await
+        self.send_batch_with_delay(payloads.into(), Duration::ZERO)
+            .await
     }
 
     /// Send multiple JSON payloads after a delay.
@@ -141,8 +130,22 @@ impl Producer {
         payloads: impl Into<Vec<Value>>,
         delay: Duration,
     ) -> Result<Vec<Message>> {
-        let payloads = payloads.into();
-        self.producer.send_batch(&payloads, Some(delay)).await
+        self.send_batch_with_delay(payloads.into(), delay).await
+    }
+
+    async fn send_batch_with_delay(
+        &self,
+        payloads: Vec<Value>,
+        delay: Duration,
+    ) -> Result<Vec<Message>> {
+        let messages = self
+            .producer
+            .batch_enqueue_delayed(&payloads, duration_secs_u32(delay)?)
+            .await?;
+        Ok(messages
+            .into_iter()
+            .map(|message| message_from_pgqrs(message, None))
+            .collect())
     }
 }
 
@@ -152,7 +155,7 @@ pub struct Consumer {
     queue_name: String,
     namespace: String,
     worker_id: String,
-    consumer: crate::pgqrs_adapter::Consumer,
+    consumer: pgqrs::Consumer,
 }
 
 impl Consumer {
@@ -173,12 +176,23 @@ impl Consumer {
 
     /// Lease at most one visible message for the supplied visibility timeout.
     pub async fn read(&self, vt: Duration) -> Result<Option<Message>> {
-        self.consumer.read(vt).await
+        let mut messages = self.read_batch(vt, 1).await?;
+        Ok(messages.pop())
     }
 
     /// Lease up to `qty` visible messages for the supplied visibility timeout.
     pub async fn read_batch(&self, vt: Duration, qty: usize) -> Result<Vec<Message>> {
-        self.consumer.read_batch(vt, qty).await
+        let vt = duration_secs_u32(vt)?;
+        let worker_id = self.consumer.worker_id();
+        let messages = self.consumer.dequeue_many_with_delay(qty, vt).await?;
+
+        Ok(messages
+            .into_iter()
+            .map(|message| {
+                let receipt_handle = Some(ReceiptHandle::from_parts(message.id, worker_id));
+                message_from_pgqrs(message, receipt_handle)
+            })
+            .collect())
     }
 
     /// Long-poll for visible messages.
@@ -201,42 +215,86 @@ impl Consumer {
     /// Permanently delete a leased message.
     ///
     /// The receipt handle must come from a message leased by this consumer.
-    pub async fn delete_message(&self, receipt_handle: impl Into<ReceiptHandle>) -> Result<bool> {
-        self.consumer.delete_message(&receipt_handle.into()).await
+    pub async fn delete_message(&self, receipt_handle: ReceiptHandle) -> Result<bool> {
+        let message_id = self.message_id_from_receipt(&receipt_handle)?;
+        Ok(self.consumer.delete(message_id).await?)
     }
 
     /// Archive a leased message and retain it for history.
     ///
     /// The receipt handle must come from a message leased by this consumer.
-    pub async fn archive_message(
-        &self,
-        receipt_handle: impl Into<ReceiptHandle>,
-    ) -> Result<Option<Message>> {
-        self.consumer.archive_message(&receipt_handle.into()).await
+    pub async fn archive_message(&self, receipt_handle: ReceiptHandle) -> Result<Option<Message>> {
+        let message_id = self.message_id_from_receipt(&receipt_handle)?;
+        Ok(self
+            .consumer
+            .archive(message_id)
+            .await?
+            .map(|message| message_from_pgqrs(message, None)))
     }
 
     /// Archive multiple leased messages.
     ///
     /// Each receipt handle must come from a message leased by this consumer.
-    pub async fn archive_messages(
-        &self,
-        receipt_handles: impl Into<Vec<ReceiptHandle>>,
-    ) -> Result<Vec<bool>> {
-        self.consumer
-            .archive_messages(&receipt_handles.into())
-            .await
+    pub async fn archive_messages(&self, receipt_handles: Vec<ReceiptHandle>) -> Result<Vec<bool>> {
+        let message_ids = receipt_handles
+            .iter()
+            .map(|handle| self.message_id_from_receipt(handle))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(self.consumer.archive_many(message_ids).await?)
     }
 
     /// Set the visibility timeout for a leased message.
     ///
     /// The receipt handle must come from a message leased by this consumer.
-    pub async fn set_vt(
-        &self,
-        receipt_handle: impl Into<ReceiptHandle>,
-        vt: Duration,
-    ) -> Result<bool> {
-        self.consumer.set_vt(&receipt_handle.into(), vt).await
+    pub async fn set_vt(&self, receipt_handle: ReceiptHandle, vt: Duration) -> Result<bool> {
+        let message_id = self.message_id_from_receipt(&receipt_handle)?;
+        Ok(self
+            .consumer
+            .extend_vt(message_id, duration_secs_u32(vt)?)
+            .await?)
     }
+
+    fn message_id_from_receipt(&self, receipt_handle: &ReceiptHandle) -> Result<i64> {
+        if receipt_handle.worker_id() != self.consumer.worker_id() {
+            return Err(Error::OwnershipMismatch);
+        }
+        Ok(receipt_handle.message_id())
+    }
+}
+
+fn message_from_pgqrs(
+    message: pgqrs::QueueMessage,
+    receipt_handle: Option<ReceiptHandle>,
+) -> Message {
+    let state = message_state(&message);
+    Message {
+        message_id: message.id,
+        read_count: message.read_ct.max(0) as u32,
+        enqueued_at: SystemTime::from(message.enqueued_at),
+        visible_at: SystemTime::from(message.vt),
+        payload: message.payload,
+        receipt_handle,
+        state,
+    }
+}
+
+fn message_state(message: &pgqrs::QueueMessage) -> MessageState {
+    let now = SystemTime::now();
+    if message.archived_at.is_some() {
+        MessageState::Archived
+    } else if message.consumer_worker_id.is_some() {
+        MessageState::Leased
+    } else if SystemTime::from(message.vt) > now {
+        MessageState::Delayed
+    } else {
+        MessageState::Visible
+    }
+}
+
+fn duration_secs_u32(duration: Duration) -> Result<u32> {
+    u32::try_from(duration.as_secs()).map_err(|_| {
+        Error::InvalidArgument("duration is too large for pgqrs seconds field".to_string())
+    })
 }
 
 #[cfg(test)]
@@ -246,9 +304,10 @@ mod tests {
     #[test]
     fn receipt_handles_round_trip_message_and_worker_ids() {
         let receipt = ReceiptHandle::from_parts(42, 7);
-        let decoded = receipt.decode().expect("receipt should decode");
+        let encoded = receipt.encode();
+        let parsed = ReceiptHandle::parse(&encoded).expect("receipt should parse");
 
-        assert_eq!(decoded.message_id, 42);
-        assert_eq!(decoded.worker_id, 7);
+        assert_eq!(parsed.message_id(), 42);
+        assert_eq!(parsed.worker_id(), 7);
     }
 }

@@ -128,8 +128,8 @@ Suggested module layout:
   inspection handle and read-only operations
 - `src/types.rs`
   public message, metrics, queue, and state types
-- `src/pgqrs_adapter.rs`
-  internal adapter layer over `pgqrs`
+- `src/backend.rs`
+  internal backend layer over `pgqrs`
 
 The current workflow module should be removed from the public surface in the implementation phase.
 
@@ -207,7 +207,7 @@ Replace the current scaffolded public API with the approved queue-only API desig
 - no workflow APIs remain in the exported product surface
 - docs reflect the new Rust surface at a high level
 
-## Phase 2: `pgqrs` Capability and Adapter Layer
+## Phase 2: `pgqrs` Capability and Backend Layer
 
 ### Objective
 
@@ -230,7 +230,7 @@ Ensure `pgqrs` exposes the capabilities required by `s3q`, then wire the Rust su
 
 ### Files
 
-- new `src/pgqrs_adapter.rs`
+- new `src/backend.rs`
 - `src/client.rs`
 - `src/queue.rs`
 - `src/types.rs`
@@ -238,7 +238,7 @@ Ensure `pgqrs` exposes the capabilities required by `s3q`, then wire the Rust su
 
 ### Key Design Choice
 
-The adapter layer should be internal. `pgqrs` types should not leak into the stable `s3q` public API.
+The backend layer should be internal. `pgqrs` types should not leak into the stable `s3q` public API.
 
 ### Exit Criteria
 
@@ -251,9 +251,9 @@ The adapter layer should be internal. `pgqrs` types should not leak into the sta
 
 ### Objective
 
-Prove the `s3q` adapter works against the real S3-backed queue path before expanding the product surface.
+Prove the `s3q` backend works against the real S3-backed queue path before expanding the product surface.
 
-This should be a separate phase from the adapter implementation. The adapter PR can stay focused on wiring and API shape; the integration-test phase should focus on behavior, regressions, and CI/local developer workflow.
+This should be a separate phase from the backend implementation. The backend PR can stay focused on wiring and API shape; the integration-test phase should focus on behavior, regressions, and CI/local developer workflow.
 
 ### Tasks
 
@@ -323,7 +323,7 @@ Implement the read-only inspection surface.
 
 - `src/inspect.rs`
 - `src/types.rs`
-- `src/pgqrs_adapter.rs`
+- `src/backend.rs`
 - `src/error.rs`
 
 ### Hard Part
@@ -357,7 +357,7 @@ Add the long-polling convenience API using `pgqrs` polling support on the consum
 ### Files
 
 - `src/queue.rs`
-- `src/pgqrs_adapter.rs`
+- `src/backend.rs`
 - tests
 
 ### Exit Criteria
@@ -533,7 +533,7 @@ Outcome:
 
 1. Complete the repository baseline work in `repository-setup-plan.md`
 2. Refactor the Rust scaffold to match the approved queue-only API names
-3. Implement the internal `pgqrs` adapter layer
+3. Implement the internal `pgqrs` backend layer
 4. Add the Phase 2.5 S3 integration-test gate
 5. Implement inspection only after the integration gate passes
 

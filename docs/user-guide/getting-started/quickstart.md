@@ -26,8 +26,7 @@ async fn connect() -> s3q::Result<s3q::Client> {
 
 ```rust
 async fn setup(client: &s3q::Client) -> s3q::Result<()> {
-    let queue = client.queue("emails");
-    queue.create_queue().await?;
+    client.create_queue("emails").await?;
     Ok(())
 }
 ```
