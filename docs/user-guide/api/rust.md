@@ -137,9 +137,30 @@ Use `message_id` for logs and debugging. Use `receipt_handle` for completion and
 Use inspection APIs for read-only views:
 
 ```rust
-let request = client
+let page = client
     .inspect()
     .list_messages("emails")
     .with_state(s3q::MessageState::Leased)
-    .with_limit(100);
+    .with_limit(100)
+    .execute()
+    .await?;
+```
+
+List queues and metrics:
+
+```rust
+let queues = client.inspect().list_queues().await?;
+let metrics = client.inspect().metrics("emails").await?;
+let all_metrics = client.inspect().metrics_all().await?;
+```
+
+Inspect retained archived messages:
+
+```rust
+let archived = client
+    .inspect()
+    .list_archived_messages("emails")
+    .with_limit(100)
+    .execute()
+    .await?;
 ```

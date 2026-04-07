@@ -45,6 +45,13 @@ impl From<pgqrs::Error> for Error {
     fn from(error: pgqrs::Error) -> Self {
         match error {
             pgqrs::Error::QueueNotFound { name } => Self::QueueNotFound(name),
+            pgqrs::Error::NotFound { entity, id }
+                if entity == "message" || entity == "QueueMessage" =>
+            {
+                id.parse()
+                    .map(Self::MessageNotFound)
+                    .unwrap_or_else(|_| Self::Internal(format!("message with id '{id}' not found")))
+            }
             pgqrs::Error::QueueAlreadyExists { name } => {
                 Self::InvalidArgument(format!("queue already exists: {name}"))
             }

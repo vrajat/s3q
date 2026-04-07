@@ -1,9 +1,11 @@
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::{store::StoreState, types::ReceiptHandle, Error, Message, MessageState, Result};
+use crate::{
+    store::StoreState, types::message_from_pgqrs, types::ReceiptHandle, Error, Message, Result,
+};
 
 #[derive(Debug, Clone)]
 /// Queue-scoped handle.
@@ -263,35 +265,6 @@ impl Consumer {
             return Err(Error::OwnershipMismatch);
         }
         Ok(receipt_handle.message_id())
-    }
-}
-
-fn message_from_pgqrs(
-    message: pgqrs::QueueMessage,
-    receipt_handle: Option<ReceiptHandle>,
-) -> Message {
-    let state = message_state(&message);
-    Message {
-        message_id: message.id,
-        read_count: message.read_ct.max(0) as u32,
-        enqueued_at: SystemTime::from(message.enqueued_at),
-        visible_at: SystemTime::from(message.vt),
-        payload: message.payload,
-        receipt_handle,
-        state,
-    }
-}
-
-fn message_state(message: &pgqrs::QueueMessage) -> MessageState {
-    let now = SystemTime::now();
-    if message.archived_at.is_some() {
-        MessageState::Archived
-    } else if message.consumer_worker_id.is_some() {
-        MessageState::Leased
-    } else if SystemTime::from(message.vt) > now {
-        MessageState::Delayed
-    } else {
-        MessageState::Visible
     }
 }
 

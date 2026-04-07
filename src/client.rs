@@ -34,6 +34,10 @@ impl Client {
         &self.config
     }
 
+    pub(crate) fn store(&self) -> &StoreState {
+        &self.store
+    }
+
     /// Create a queue and return a queue-scoped handle for it.
     pub async fn create_queue(&self, name: impl Into<String>) -> Result<Queue> {
         let name = name.into();

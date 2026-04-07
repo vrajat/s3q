@@ -16,9 +16,8 @@ mod types;
 pub use client::{connect, Client};
 pub use config::ClientConfig;
 pub use error::{Error, Result};
-pub use inspect::{
-    GetMessageRequest, Inspect, ListArchivedMessagesRequest, ListMessagesRequest,
-    ListQueuesRequest, MetricsAllRequest, MetricsRequest,
-};
+pub use inspect::{Inspect, ListArchivedMessagesRequest, ListMessagesRequest};
 pub use queue::{Consumer, Producer, Queue};
-pub use types::{ArchivedMessage, Message, MessageState, QueueMetrics, ReceiptHandle};
+pub use types::{
+    ArchivedMessage, Message, MessagePage, MessageState, QueueMetrics, QueueSummary, ReceiptHandle,
+};
