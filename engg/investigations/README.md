@@ -7,4 +7,4 @@ Current baseline references:
 - `pgqrs.vrajat.com`
 - `https://turbopuffer.com/blog/object-storage-queue`
 - SQS for queue semantics
-- Temporal for workflow semantics
+- `pgmq` for queue API shape

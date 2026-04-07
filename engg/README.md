@@ -8,6 +8,8 @@ This directory holds internal product and engineering documents for s3q.
 - `design/`: living design documents
 - `adr/`: architecture decision records
 - `investigations/`: research notes and references
+- `processes/`: engineering process notes
+- `reviews/`: substantial review notes and test plans
 
 ## Writing Rule
 

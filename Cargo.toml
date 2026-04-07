@@ -3,11 +3,11 @@ name = "s3q"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "S3-backed queue and durable workflow primitives"
+description = "Thin S3-backed queue product layer over pgqrs"
 homepage = "https://s3q.dev"
 repository = "https://github.com/vrajat/s3q"
 readme = "README.md"
-keywords = ["s3", "queue", "workflow", "durable-execution"]
+keywords = ["s3", "queue", "pgqrs", "object-storage"]
 categories = ["asynchronous", "api-bindings"]
 
 [lib]

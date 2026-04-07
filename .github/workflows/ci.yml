@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  # Buildkite is the primary CI path. This workflow is kept for manual runs
+  # and as a portable reference for contributors.
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+
+jobs:
+  checks:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Cache cargo artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run repository checks
+        run: mise exec -- make check
+
+      - name: Run Rust tests
+        run: mise exec -- make test-rust
+
+      - name: Run Python smoke tests
+        run: mise exec -- make test-py
+
+      - name: Build docs
+        run: mise exec -- make docs-build

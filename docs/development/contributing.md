@@ -3,7 +3,8 @@
 ## Current Priorities
 
 - Wire the Rust crate to `pgqrs::store::s3::S3Store`
-- Keep queue and workflow APIs cleanly separated
+- Keep `s3q` as a thin queue product layer
+- Preserve `pgqrs` producer and consumer worker identity
 - Keep the Python package thin
 - Bias toward operationally simple features first
 
@@ -16,7 +17,7 @@
 
 ## First Good Contributions
 
-- implement queue create/send/receive/delete
-- implement workflow start/describe/result
-- add golden examples for Rust and Python
+- implement queue create/send/read/delete/archive
+- implement inspection metrics
+- add queue-only golden examples for Rust and Python
 - add end-to-end tests against local object storage

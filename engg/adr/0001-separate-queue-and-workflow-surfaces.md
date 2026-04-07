@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by `0002-queue-only-v1.md`
 
 ## Context
 

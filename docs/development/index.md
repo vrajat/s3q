@@ -1,6 +1,6 @@
 # Development
 
-This repository is organized to keep product docs, engineering docs, Rust code, and Python code separate from the start.
+This repository is organized to keep product docs, engineering docs, Rust code, and Python code separate.
 
 ## Top-Level Layout
 
@@ -9,9 +9,21 @@ This repository is organized to keep product docs, engineering docs, Rust code, 
 - `docs/`: public docs
 - `engg/`: internal docs
 
+## Local Tasks
+
+Use `mise` for tool versions and `make` for tasks:
+
+```bash
+mise install
+mise exec -- make check
+mise exec -- make test
+mise exec -- make docs-build
+```
+
 ## Expected Evolution
 
-1. Stabilize API vocabulary.
-2. Add `pgqrs` integration.
-3. Replace stubs with working queue and workflow operations.
-4. Add a service API and deployment model.
+1. Keep the repository baseline stable.
+2. Refactor the Rust scaffold to the approved queue-only API.
+3. Add required capabilities to `pgqrs`.
+4. Wire `s3q` to `pgqrs::store::s3::S3Store`.
+5. Mirror the Rust surface in Python and CLI.
