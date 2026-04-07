@@ -1,7 +1,7 @@
 [project]
 site_name = "s3q"
 site_url = "https://s3q.dev"
-site_description = "A thin S3-backed queue product layer over pgqrs S3Store"
+site_description = "A small S3-backed queue library"
 docs_dir = "docs"
 site_dir = "site"
 repo_url = "https://github.com/vrajat/s3q"
@@ -11,9 +11,22 @@ nav = [
   {"Home" = "index.md"},
   {"User Guide" = [
     "user-guide/index.md",
+    {"Getting Started" = [
+      "user-guide/getting-started/quickstart.md",
+    ]},
     {"Queue Concepts" = "user-guide/concepts/queue-model.md"},
     {"Inspection and Metrics" = "user-guide/concepts/inspection-and-metrics.md"},
-    {"Quickstart" = "user-guide/getting-started/quickstart.md"},
+    {"API" = [
+      "user-guide/api/index.md",
+      {"Rust" = "user-guide/api/rust.md"},
+    ]},
+    {"Guides" = [
+      "user-guide/guides/index.md",
+      {"Basic Queue" = "user-guide/guides/basic-queue.md"},
+      {"Message Lifecycle" = "user-guide/guides/message-lifecycle.md"},
+      {"Worker Identity" = "user-guide/guides/worker-identity.md"},
+      {"Delayed Messages" = "user-guide/guides/delayed-messages.md"},
+    ]},
   ]},
   {"Reference" = [
     {"Rust API" = "reference/rust-api.md"},

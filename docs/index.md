@@ -1,31 +1,70 @@
 # s3q
 
-s3q is a proposal and implementation effort for an **S3-backed queue product layer** built on top of `pgqrs::store::s3::S3Store`.
+**s3q is a small queue library for applications that want durable queue state in S3.**
 
-The goal is not to clone an existing queue product feature-for-feature. The goal is to expose a small, practical queue API with:
+Use it when you want a simple job queue without running a queue service or a database server. Messages are stored in an S3-backed queue, consumers lease work for a visibility timeout, and completed work can either be deleted or archived for later debugging and stats.
 
-- `pgmq`-style API naming
-- SQS-like lease-and-ack semantics
-- exact metrics and read-only inspection
-- `pgqrs` producer and consumer worker identity
-- `S3Store` as the only v1 backend
+## What You Can Build
 
-## Product Shape
+- Background job workers
+- Durable task queues for batch jobs
+- Small control-plane queues for services and CLIs
+- Operational queues where archived messages help explain incidents
 
-- A Rust core library that maps product terminology to `pgqrs`
-- A thin Python SDK over that core
-- A Python CLI and optional service layer
-- A docs site hosted at `s3q.dev`
+## Queue Semantics
 
-## Guiding Principle
+- `send` writes a JSON message to a queue.
+- `read` and `read_batch` lease messages for a visibility timeout.
+- `archive_message` marks a message as completed and keeps it for history.
+- `delete_message` permanently removes a completed message.
+- `set_vt` changes the visibility timeout for a leased message.
+- `metrics` and `metrics_all` return exact queue snapshots at query time.
 
-Keep `s3q` thin. If a queue capability is missing, implement it in `pgqrs` and expose it here as product terminology.
+Messages are delivered at least once. A consumer should make its handler idempotent and finish each message by archiving or deleting it.
+
+## Quick Example
+
+```rust
+use serde_json::json;
+use std::time::Duration;
+
+async fn run() -> s3q::Result<()> {
+    let client = s3q::connect("s3://my-bucket/queues/app.db").await?;
+    let queue = client.queue("emails");
+
+    queue.create_queue().await?;
+
+    let producer = queue.producer("api").await?;
+    producer
+        .send(json!({
+            "to": "user@example.com",
+            "template": "welcome"
+        }))
+        .await?;
+
+    let consumer = queue.consumer("email-worker-1").await?;
+    let messages = consumer.read_batch(Duration::from_secs(30), 10).await?;
+
+    for message in messages {
+        send_email(&message.payload).await?;
+
+        if let Some(receipt) = message.receipt_handle {
+            consumer.archive_message(receipt).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn send_email(_payload: &serde_json::Value) -> s3q::Result<()> {
+    Ok(())
+}
+```
 
 ## Read Next
 
-- [User guide overview](user-guide/index.md)
-- [Queue model](user-guide/concepts/queue-model.md)
-- [Inspection and metrics](user-guide/concepts/inspection-and-metrics.md)
 - [Quickstart](user-guide/getting-started/quickstart.md)
-
-For internal planning and architecture, see `engg/product-requirements.md` in the repository.
+- [Queue model](user-guide/concepts/queue-model.md)
+- [Rust API](user-guide/api/rust.md)
+- [Basic queue guide](user-guide/guides/basic-queue.md)
+- [Inspection and metrics](user-guide/concepts/inspection-and-metrics.md)

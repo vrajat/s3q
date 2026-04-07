@@ -1,22 +1,45 @@
 # Inspection and Metrics
 
-s3q exposes read-only inspection APIs for operational visibility.
+Inspection APIs are for operational visibility. They do not mutate queue state.
 
-## V1 Surface
+Use inspection when you need to answer questions such as:
 
-- `list_queues`
-- `metrics`
-- `metrics_all`
-- `list_messages`
-- `get_message`
-- `list_archived_messages`
+- Which queues exist?
+- How many messages are visible, leased, delayed, or archived?
+- Which messages are currently leased?
+- Which archived messages are available for debugging?
 
-Inspection should never lease, acknowledge, archive, or delete a message.
+## Metrics
 
-## Metrics Semantics
+`metrics(queue)` returns a snapshot for one queue. `metrics_all()` returns snapshots for all queues.
 
-Metrics follow `pgqrs` semantics and should be treated as exact snapshots at query time. A concurrent producer or consumer can change the queue immediately after the snapshot is returned.
+The counts are exact at the time the snapshot is produced. A producer or consumer can change the queue immediately after the snapshot returns, so do not treat metrics as a synchronization primitive.
 
-## Archived Messages
+Expected fields:
 
-Archived messages are retained for historical stats and debugging. V1 exposes archived-message inspection but does not expose replay or DLQ-specific APIs.
+- `visible_messages`
+- `leased_messages`
+- `delayed_messages`
+- `archived_messages`
+- `total_messages`
+
+## Message Inspection
+
+`list_messages` and `get_message` are read-only views of message state. They are useful for debugging stuck workers, checking retries, and understanding queue backlog.
+
+```rust
+let leased = client
+    .inspect()
+    .list_messages("emails")
+    .with_state(s3q::MessageState::Leased)
+    .with_limit(100);
+```
+
+Archived messages are retained separately from active queue state:
+
+```rust
+let archived = client
+    .inspect()
+    .list_archived_messages("emails")
+    .with_limit(100);
+```

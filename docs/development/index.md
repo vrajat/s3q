@@ -1,13 +1,14 @@
 # Development
 
-This repository is organized to keep product docs, engineering docs, Rust code, and Python code separate.
+This page is for contributors working on the s3q repository. Application developers should start with the [quickstart](../user-guide/getting-started/quickstart.md).
 
 ## Top-Level Layout
 
 - `src/`: Rust library crate
-- `python/`: Python SDK, CLI, and service layer
-- `docs/`: public docs
-- `engg/`: internal docs
+- `python/`: Python SDK and CLI package
+- `docs/`: public documentation
+- `engg/`: internal product and engineering documents
+- `.buildkite/`: CI pipeline
 
 ## Local Tasks
 
@@ -17,15 +18,17 @@ Use `mise` for tool versions and `make` for tasks:
 mise install
 mise exec -- make check
 mise exec -- make test
+mise exec -- make docs-build
+```
+
+Use `make docs` when you want the local Zensical dev server:
+
+```bash
 mise exec -- make docs
 ```
 
-`make docs` starts the local Zensical dev server. Use `make docs-build` for CI-style static site validation.
+## Documentation Rule
 
-## Expected Evolution
+Public docs should help a developer use s3q in an application. Keep internal design rationale in `engg/`, not in the user guide.
 
-1. Keep the repository baseline stable.
-2. Refactor the Rust scaffold to the approved queue-only API.
-3. Add required capabilities to `pgqrs`.
-4. Wire `s3q` to `pgqrs::store::s3::S3Store`.
-5. Mirror the Rust surface in Python and CLI.
+When a public API changes, update the matching docs page in the same phase.
