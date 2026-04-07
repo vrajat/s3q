@@ -6,6 +6,10 @@ use serde_json::Value;
 use crate::{pgqrs_adapter::PgqrsAdapter, types::ReceiptHandle, Message, QueueInfo, Result};
 
 #[derive(Debug, Clone)]
+/// Queue-scoped handle.
+///
+/// A queue handle creates queues and returns producer and consumer handles for
+/// a specific queue name.
 pub struct QueueHandle {
     adapter: Arc<PgqrsAdapter>,
     name: String,
@@ -25,26 +29,38 @@ impl QueueHandle {
         }
     }
 
+    /// Return the queue name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Return the namespace for this queue handle.
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
+    /// Create the queue.
     pub async fn create_queue(&self) -> Result<QueueInfo> {
         self.adapter.create_queue(&self.name).await
     }
 
+    /// Delete the queue.
+    ///
+    /// Deletion fails if the backing queue still has messages or associated
+    /// workers that prevent safe deletion.
     pub async fn delete_queue(&self) -> Result<()> {
         self.adapter.delete_queue(&self.name).await
     }
 
+    /// Purge messages from the queue while keeping the queue itself.
     pub async fn purge_queue(&self) -> Result<()> {
         self.adapter.purge_queue(&self.name).await
     }
 
+    /// Create a managed producer handle for this queue.
+    ///
+    /// Use a stable worker id so sent messages can be traced back to the
+    /// producer during incident review.
     pub async fn producer(&self, worker_id: impl Into<String>) -> Result<Producer> {
         let worker_id = worker_id.into();
         let producer = self.adapter.producer(&self.name, &worker_id).await?;
@@ -57,6 +73,10 @@ impl QueueHandle {
         })
     }
 
+    /// Create a managed consumer handle for this queue.
+    ///
+    /// Use a stable worker id so leased messages can be traced back to the
+    /// consumer that owned them.
     pub async fn consumer(&self, worker_id: impl Into<String>) -> Result<Consumer> {
         let worker_id = worker_id.into();
         let consumer = self.adapter.consumer(&self.name, &worker_id).await?;
@@ -71,6 +91,7 @@ impl QueueHandle {
 }
 
 #[derive(Debug, Clone)]
+/// Producer handle for sending messages to one queue.
 pub struct Producer {
     queue_name: String,
     namespace: String,
@@ -79,22 +100,27 @@ pub struct Producer {
 }
 
 impl Producer {
+    /// Return the queue name this producer sends to.
     pub fn queue_name(&self) -> &str {
         &self.queue_name
     }
 
+    /// Return the stable producer worker id.
     pub fn worker_id(&self) -> &str {
         &self.worker_id
     }
 
+    /// Return the namespace used by this producer.
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
+    /// Send one JSON payload immediately.
     pub async fn send(&self, payload: impl Into<Value>) -> Result<Message> {
         self.producer.send(payload.into(), None).await
     }
 
+    /// Send one JSON payload after a delay.
     pub async fn send_delayed(
         &self,
         payload: impl Into<Value>,
@@ -103,11 +129,13 @@ impl Producer {
         self.producer.send(payload.into(), Some(delay)).await
     }
 
+    /// Send multiple JSON payloads immediately.
     pub async fn send_batch(&self, payloads: impl Into<Vec<Value>>) -> Result<Vec<Message>> {
         let payloads = payloads.into();
         self.producer.send_batch(&payloads, None).await
     }
 
+    /// Send multiple JSON payloads after a delay.
     pub async fn send_batch_delayed(
         &self,
         payloads: impl Into<Vec<Value>>,
@@ -119,6 +147,7 @@ impl Producer {
 }
 
 #[derive(Debug, Clone)]
+/// Consumer handle for leasing and completing messages from one queue.
 pub struct Consumer {
     queue_name: String,
     namespace: String,
@@ -127,26 +156,35 @@ pub struct Consumer {
 }
 
 impl Consumer {
+    /// Return the queue name this consumer reads from.
     pub fn queue_name(&self) -> &str {
         &self.queue_name
     }
 
+    /// Return the stable consumer worker id.
     pub fn worker_id(&self) -> &str {
         &self.worker_id
     }
 
+    /// Return the namespace used by this consumer.
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
+    /// Lease at most one visible message for the supplied visibility timeout.
     pub async fn read(&self, vt: Duration) -> Result<Option<Message>> {
         self.consumer.read(vt).await
     }
 
+    /// Lease up to `qty` visible messages for the supplied visibility timeout.
     pub async fn read_batch(&self, vt: Duration, qty: usize) -> Result<Vec<Message>> {
         self.consumer.read_batch(vt, qty).await
     }
 
+    /// Long-poll for visible messages.
+    ///
+    /// This API is reserved for the polling phase and currently returns
+    /// [`Error::NotImplemented`](crate::Error::NotImplemented).
     pub async fn read_with_poll(
         &self,
         vt: Duration,
@@ -160,10 +198,16 @@ impl Consumer {
         ))
     }
 
+    /// Permanently delete a leased message.
+    ///
+    /// The receipt handle must come from a message leased by this consumer.
     pub async fn delete_message(&self, receipt_handle: impl Into<ReceiptHandle>) -> Result<bool> {
         self.consumer.delete_message(&receipt_handle.into()).await
     }
 
+    /// Archive a leased message and retain it for history.
+    ///
+    /// The receipt handle must come from a message leased by this consumer.
     pub async fn archive_message(
         &self,
         receipt_handle: impl Into<ReceiptHandle>,
@@ -171,6 +215,9 @@ impl Consumer {
         self.consumer.archive_message(&receipt_handle.into()).await
     }
 
+    /// Archive multiple leased messages.
+    ///
+    /// Each receipt handle must come from a message leased by this consumer.
     pub async fn archive_messages(
         &self,
         receipt_handles: impl Into<Vec<ReceiptHandle>>,
@@ -180,6 +227,9 @@ impl Consumer {
             .await
     }
 
+    /// Set the visibility timeout for a leased message.
+    ///
+    /// The receipt handle must come from a message leased by this consumer.
     pub async fn set_vt(
         &self,
         receipt_handle: impl Into<ReceiptHandle>,

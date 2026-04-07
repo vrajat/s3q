@@ -9,6 +9,7 @@ from .service import ServiceConfig, run_service
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the s3q command-line parser."""
     parser = argparse.ArgumentParser(prog="s3q")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the s3q CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
 

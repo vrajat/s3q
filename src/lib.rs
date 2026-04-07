@@ -3,6 +3,8 @@
 //! The public API is built around queues, producers, consumers, leases, and
 //! read-only inspection.
 
+#![warn(missing_docs)]
+
 mod client;
 mod config;
 mod error;
