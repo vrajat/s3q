@@ -1,28 +1,64 @@
 # Queue Model
 
-s3q exposes a queue-only product layer over `pgqrs::store::s3::S3Store`.
+s3q is a lease-and-ack queue, not a pop-and-remove queue.
 
-## Core Semantics
+When a consumer reads a message, the message is leased to that consumer for a visibility timeout. The message is not complete until the consumer archives or deletes it. If the worker crashes or the lease expires before completion, the message can be delivered again.
 
-- Delivery is **at least once**
-- `read` and `read_batch` return leased messages
-- The message remains active until `delete_message` or `archive_message`
-- `set_vt` extends or shrinks the visibility timeout for the owned lease
-- Duplicate delivery is expected unless a later FIFO or dedup mode is added
-- Producers and consumers have stable worker identities
+## Message States
 
-## Why This Shape
+- **Visible**: the message is ready to be leased.
+- **Leased**: a consumer owns the message until the visibility timeout expires.
+- **Delayed**: the message was scheduled for later and is not visible yet.
+- **Archived**: the message was completed and retained for stats or debugging.
 
-`pgmq` provides a compact and proven queue API vocabulary. SQS provides the familiar lease-and-ack contract for storage-backed queues. Both map cleanly to the `pgqrs` message lifecycle:
+## Producers and Consumers
 
-- enqueue
-- lease
-- delete, archive, or retry
-- inspect retained history
+Producers and consumers have stable worker ids.
 
-## What s3q Should Not Do
+```rust
+let producer = client.queue("emails").producer("api").await?;
+let consumer = client.queue("emails").consumer("email-worker-1").await?;
+```
 
-- It should not expose a pop-and-remove API as the primary model.
-- It should not make exactly-once delivery promises at the transport layer.
-- It should not overload queue APIs with orchestration concerns.
-- It should not implement queue capabilities outside `pgqrs`.
+Use names that help incident review. For example, `api`, `billing-worker-a`, or `email-worker-us-east-1a` are better than generated random ids when you want to understand who sent or owned a message.
+
+## Receipt Handles
+
+`read` and `read_batch` return a receipt handle for each leased message. Use that handle to complete or extend the lease.
+
+```rust
+let messages = consumer.read_batch(std::time::Duration::from_secs(30), 10).await?;
+
+for message in messages {
+    if let Some(receipt) = message.receipt_handle {
+        consumer.archive_message(receipt).await?;
+    }
+}
+```
+
+Treat receipt handles as opaque strings. Do not parse them or store them as durable business identifiers. Use `message_id` when you need a stable message id for logs.
+
+## Archive vs Delete
+
+Use `archive_message` when a message completed successfully and you want to retain it for historical stats or debugging.
+
+Use `delete_message` when you intentionally want to remove the message and do not need retained history.
+
+```rust
+consumer.archive_message(receipt).await?;
+```
+
+```rust
+consumer.delete_message(receipt).await?;
+```
+
+## Delivery Guarantees
+
+s3q provides at-least-once delivery. A message can be delivered more than once, so handlers should be idempotent.
+
+Common patterns:
+
+- Include an idempotency key in the payload.
+- Make downstream writes safe to retry.
+- Archive only after the side effect succeeds.
+- Extend visibility for long-running work.

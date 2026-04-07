@@ -9,11 +9,11 @@ mise exec -- make check
 
 Useful tasks:
 
-- `make check`
-- `make test`
-- `make test-rust`
-- `make test-py`
-- `make docs-build`
-- `make docs-serve`
+- `make check`: format, Rust checks, Python compile check, and docs build
+- `make test`: Rust tests plus Python compile check
+- `make test-rust`: Rust tests only
+- `make test-py`: Python compile check only
+- `make docs`: local Zensical dev server
+- `make docs-build`: static docs build for CI
 
-Docs are built with Zensical, not MkDocs.
+Docs are served and built with Zensical.

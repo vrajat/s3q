@@ -2,22 +2,24 @@
 
 ## Current Priorities
 
-- Wire the Rust crate to `pgqrs::store::s3::S3Store`
-- Keep `s3q` as a thin queue product layer
-- Preserve `pgqrs` producer and consumer worker identity
-- Keep the Python package thin
-- Bias toward operationally simple features first
+- Keep the public queue API small and application-oriented.
+- Preserve producer and consumer worker identity.
+- Keep inspection APIs read-only.
+- Keep Python and CLI layers thin over the core queue API.
+- Keep public docs useful for application developers, not just implementers.
 
 ## Repository Rules
 
-- Put user-facing documentation in `docs/`
-- Put engineering decisions in `engg/`
-- Keep Rust core logic in `src/`
-- Keep Python CLI and service concerns in `python/`
+- Put user-facing documentation in `docs/`.
+- Put engineering decisions in `engg/`.
+- Keep Rust queue logic in `src/`.
+- Keep Python CLI and service concerns in `python/`.
+- Do not add workflow APIs to v1.
 
 ## First Good Contributions
 
-- implement queue create/send/read/delete/archive
-- implement inspection metrics
-- add queue-only golden examples for Rust and Python
-- add end-to-end tests against local object storage
+- Implement inspection metrics.
+- Wire `read_with_poll`.
+- Add queue-only examples for Rust and Python.
+- Add end-to-end tests against local object storage.
+- Improve docs with runnable application examples.

@@ -1,37 +1,33 @@
 # User Guide
 
-s3q has two v1 product surfaces:
+s3q has two surfaces:
 
-1. **Queue APIs** for sending, reading, leasing, deleting, and archiving messages.
-2. **Inspection APIs** for read-only metrics and message inspection.
+- **Queue APIs** for creating queues, sending messages, leasing work, and completing messages.
+- **Inspection APIs** for checking queue health, message state, and archived history.
 
-Both surfaces are backed by `pgqrs::store::s3::S3Store`.
+Most applications only need a client, a queue, one or more producers, and one or more consumers.
 
-## Queue Surface
+## The Basic Flow
 
-Queues use `pgmq`-style names:
+1. Connect with an S3 DSN such as `s3://my-bucket/queues/app.db`.
+2. Create a queue with `let queue = client.create_queue("emails").await?`.
+3. Send messages through a named producer.
+4. Read messages through a named consumer.
+5. Archive or delete each leased message by using its receipt handle.
+6. Inspect metrics when you need operational visibility.
 
-- `send`
-- `send_batch`
-- `read`
-- `read_batch`
-- `read_with_poll`
-- `delete_message`
-- `archive_message`
-- `archive_messages`
-- `set_vt`
+## Important Concepts
 
-The core semantic is **lease then ack**, not destructive pop.
+- A **producer** has a stable worker id so sent messages can be traced back to the source.
+- A **consumer** has a stable worker id so leased messages can be tracked to the worker that owns them.
+- A **receipt handle** represents the lease returned by `read` or `read_batch`.
+- `archive_message` is the normal completion path when you want historical stats and debugging data.
+- `delete_message` is destructive and should be reserved for data you do not need to retain.
 
-## Inspection Surface
+## Recommended Reading Order
 
-Inspection is read-only and operational:
-
-- `list_queues`
-- `metrics`
-- `metrics_all`
-- `list_messages`
-- `get_message`
-- `list_archived_messages`
-
-Metrics should follow `pgqrs` semantics and are exact snapshots of durable queue state.
+- [Quickstart](getting-started/quickstart.md)
+- [Queue model](concepts/queue-model.md)
+- [Message lifecycle](guides/message-lifecycle.md)
+- [Rust API](api/rust.md)
+- [Inspection and metrics](concepts/inspection-and-metrics.md)

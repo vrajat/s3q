@@ -128,8 +128,8 @@ Suggested module layout:
   inspection handle and read-only operations
 - `src/types.rs`
   public message, metrics, queue, and state types
-- `src/pgqrs.rs`
-  internal adapter layer over `pgqrs`
+- `src/store.rs`
+  internal shared store state over `pgqrs`
 
 The current workflow module should be removed from the public surface in the implementation phase.
 
@@ -207,7 +207,7 @@ Replace the current scaffolded public API with the approved queue-only API desig
 - no workflow APIs remain in the exported product surface
 - docs reflect the new Rust surface at a high level
 
-## Phase 2: `pgqrs` Capability and Adapter Layer
+## Phase 2: `pgqrs` Capability and Store State
 
 ### Objective
 
@@ -230,7 +230,7 @@ Ensure `pgqrs` exposes the capabilities required by `s3q`, then wire the Rust su
 
 ### Files
 
-- new `src/pgqrs.rs`
+- new `src/store.rs`
 - `src/client.rs`
 - `src/queue.rs`
 - `src/types.rs`
@@ -238,13 +238,65 @@ Ensure `pgqrs` exposes the capabilities required by `s3q`, then wire the Rust su
 
 ### Key Design Choice
 
-The adapter layer should be internal. `pgqrs` types should not leak into the stable `s3q` public API.
+The store-state layer should be internal. `pgqrs` types should not leak into the stable `s3q` public API.
 
 ### Exit Criteria
 
 - queue mutation APIs work end-to-end through `S3Store`
 - producer and consumer handles preserve `pgqrs` ownership semantics
-- Rust integration tests can create a queue, send, read, delete, archive, and set visibility
+- unit and compile checks pass against the released `pgqrs` crate
+- docs are updated for queue handles, producers, and consumers
+
+## Phase 2.5: S3 Integration Test Gate
+
+### Objective
+
+Prove the `s3q` store state works against the real S3-backed queue path before expanding the product surface.
+
+This should be a separate phase from the store-state implementation. The current PR can stay focused on wiring and API shape; the integration-test phase should focus on behavior, regressions, and CI/local developer workflow.
+
+### Tasks
+
+- add a LocalStack-backed integration test target
+- add or update `make test-s3` or the closest repo-standard equivalent
+- test `connect("s3://...")` through the public Rust API
+- test queue lifecycle:
+  - create queue
+  - purge queue
+  - delete queue when safe
+- test producer behavior:
+  - managed producer worker is created
+  - `send`
+  - `send_batch`
+  - delayed send, if reliable under the integration environment
+- test consumer behavior:
+  - managed consumer worker is created
+  - `read`
+  - `read_batch`
+  - receipt handles are returned for leased messages
+  - `archive_message`
+  - `archive_messages`
+  - `delete_message`
+  - `set_vt`
+- test ownership enforcement:
+  - a different consumer cannot archive/delete/set-vt a message leased by another consumer
+- test retained archive behavior:
+  - archived messages are retained rather than destructively removed
+- keep any required test-only S3 endpoint configuration in the test harness, not in the public API
+
+### Files
+
+- `tests/`
+- `Makefile`
+- `.buildkite/pipeline.yml`
+- docs under `docs/development/`
+
+### Exit Criteria
+
+- S3 integration tests pass locally against LocalStack
+- CI has a clear path to run the same tests
+- no new queue semantics are implemented in `s3q` just for tests
+- Phase 3 inspection work does not start until this gate is passing
 - Rust usage docs are updated for queue handles, producers, and consumers
 
 ## Phase 3: Inspection and Metrics
@@ -271,7 +323,7 @@ Implement the read-only inspection surface.
 
 - `src/inspect.rs`
 - `src/types.rs`
-- `src/pgqrs.rs`
+- `src/store.rs`
 - `src/error.rs`
 
 ### Hard Part
@@ -305,7 +357,7 @@ Add the long-polling convenience API using `pgqrs` polling support on the consum
 ### Files
 
 - `src/queue.rs`
-- `src/pgqrs.rs`
+- `src/store.rs`
 - tests
 
 ### Exit Criteria
@@ -436,10 +488,11 @@ Recommended environment:
 
 - Phase 1 complete
 - Phase 2 complete
+- Phase 2.5 complete
 
 Outcome:
 
-- working Rust queue operations over `S3Store`
+- working Rust queue operations over `S3Store`, covered by S3 integration tests
 
 ### Milestone B: Inspection
 
@@ -480,7 +533,8 @@ Outcome:
 
 1. Complete the repository baseline work in `repository-setup-plan.md`
 2. Refactor the Rust scaffold to match the approved queue-only API names
-3. Implement the internal `pgqrs` adapter layer
-4. Add end-to-end Rust tests before expanding Python
+3. Implement the internal `pgqrs` store-state layer
+4. Add the Phase 2.5 S3 integration-test gate
+5. Implement inspection only after the integration gate passes
 
 That sequence keeps semantics and product shape stable before surface-area expansion.

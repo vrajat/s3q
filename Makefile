@@ -42,3 +42,6 @@ docs-build:
 .PHONY: docs-serve
 docs-serve:
 	$(UV) run --with zensical $(ZENSICAL) serve
+
+.PHONY: docs
+docs: docs-serve

@@ -9,6 +9,7 @@ from .service import ServiceConfig, run_service
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the s3q command-line parser."""
     parser = argparse.ArgumentParser(prog="s3q")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -37,13 +38,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the s3q CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
     try:
         if args.command == "queue" and args.queue_command == "create":
             client = Client.connect(args.dsn)
-            client.queue(args.name).create_queue()
+            client.create_queue(args.name)
             return 0
 
         if args.command == "workflow" and args.workflow_command == "start":
