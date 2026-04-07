@@ -1,27 +1,30 @@
-//! s3q is an S3-backed queue and durable workflow library.
+//! s3q is a thin S3-backed queue product layer over `pgqrs::store::s3::S3Store`.
 //!
-//! The intended implementation builds on top of `pgqrs` and, specifically,
-//! `pgqrs::store::s3::S3Store`. This crate currently exposes the initial API
-//! vocabulary and request/response types for the first implementation phase.
+//! This crate currently exposes the queue-only v1 API vocabulary and
+//! request/response types. The next implementation phase wires these handles to
+//! `pgqrs`.
 
 mod client;
 mod config;
 mod error;
+mod inspect;
 mod queue;
-mod workflow;
+mod types;
 
 pub use client::{connect, Client};
 pub use config::ClientConfig;
 pub use error::{Error, Result};
-pub use queue::{
-    ChangeMessageVisibilityRequest, CreateQueueRequest, DeleteMessageRequest, DeleteQueueRequest,
-    GetQueueAttributesRequest, PurgeQueueRequest, QueueApi, QueueAttributes, QueueHandle,
-    ReceiveMessagesRequest, ReceivedMessage, SendMessageBatchRequest, SendMessageRequest,
-    SetQueueAttributesRequest,
+pub use inspect::{
+    GetMessageRequest, Inspect, ListArchivedMessagesRequest, ListMessagesRequest,
+    ListQueuesRequest, MetricsAllRequest, MetricsRequest,
 };
-pub use workflow::{
-    CancelWorkflowRequest, ChildWorkflowRequest, DescribeWorkflowRequest, ListWorkflowsRequest,
-    QueryWorkflowRequest, ResultWorkflowRequest, SignalWorkflowRequest, StartWorkflowRequest,
-    TerminateWorkflowRequest, TimerSpec, WorkflowApi, WorkflowExecution, WorkflowHandle,
-    WorkflowIdReusePolicy, WorkflowStatus,
+pub use queue::{
+    ArchiveMessageRequest, ArchiveMessagesRequest, Consumer, CreateQueueRequest,
+    DeleteMessageRequest, DeleteQueueRequest, Producer, PurgeQueueRequest, QueueHandle,
+    ReadBatchRequest, ReadRequest, ReadWithPollRequest, SendBatchRequest, SendRequest,
+    SetVisibilityTimeoutRequest,
+};
+pub use types::{
+    ArchivedMessage, ConsumerInfo, Message, MessageState, ProducerInfo, QueueInfo, QueueMetrics,
+    ReceiptHandle,
 };

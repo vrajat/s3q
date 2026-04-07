@@ -5,20 +5,18 @@ This is the target shape for the public API. The repository scaffold is not full
 ## Rust
 
 ```rust
-use s3q::{Client, ClientConfig};
+use std::time::Duration;
 
-let client = Client::connect(ClientConfig::new("s3://my-bucket/s3q/prod.db")).await?;
+let client = s3q::connect("s3://my-bucket/s3q/prod.db");
 let queue = client.queue("emails");
 
-let producer = queue.producer("api-worker").await?;
-producer.send(br#"{"to":"user@example.com"}"#.to_vec()).await?;
+let producer = queue.producer("api-worker");
+let send = producer.send(br#"{"to":"user@example.com"}"#.to_vec());
 
-let consumer = queue.consumer("email-worker").await?;
-let messages = consumer.read_batch(30, 10).await?;
+let consumer = queue.consumer("email-worker");
+let read = consumer.read_batch(Duration::from_secs(30), 10);
 
-for message in messages {
-    consumer.archive_message(&message.receipt_handle).await?;
-}
+let metrics = client.inspect().metrics("emails");
 ```
 
 ## Python
