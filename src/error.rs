@@ -30,3 +30,26 @@ impl fmt::Display for Error {
 impl StdError for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<pgqrs::Error> for Error {
+    fn from(error: pgqrs::Error) -> Self {
+        match error {
+            pgqrs::Error::QueueNotFound { name } => Self::QueueNotFound(name),
+            pgqrs::Error::QueueAlreadyExists { name } => {
+                Self::InvalidArgument(format!("queue already exists: {name}"))
+            }
+            pgqrs::Error::InvalidConfig { field, message } => {
+                Self::InvalidArgument(format!("{field}: {message}"))
+            }
+            pgqrs::Error::ValidationFailed { reason } => Self::InvalidArgument(reason),
+            pgqrs::Error::ConnectionFailed { source, context } => {
+                Self::StoreUnavailable(format!("{context}: {source}"))
+            }
+            pgqrs::Error::Timeout { operation } => {
+                Self::StoreUnavailable(format!("timeout during {operation}"))
+            }
+            pgqrs::Error::Conflict { message } => Self::StoreUnavailable(message),
+            other => Self::Internal(other.to_string()),
+        }
+    }
+}

@@ -1,22 +1,29 @@
 # Quickstart
 
-This is the target shape for the public API. The repository scaffold is not fully wired to `pgqrs::store::s3::S3Store` yet.
+This is the target shape for the public API. The Rust queue mutation surface is wired to `pgqrs::store::s3::S3Store`; inspection, Python, and CLI implementation are staged separately.
 
 ## Rust
 
 ```rust
+use serde_json::json;
 use std::time::Duration;
 
-let client = s3q::connect("s3://my-bucket/s3q/prod.db");
+let client = s3q::connect("s3://my-bucket/s3q/prod.db").await?;
 let queue = client.queue("emails");
 
-let producer = queue.producer("api-worker");
-let send = producer.send(br#"{"to":"user@example.com"}"#.to_vec());
+queue.create_queue().await?;
 
-let consumer = queue.consumer("email-worker");
-let read = consumer.read_batch(Duration::from_secs(30), 10);
+let producer = queue.producer("api-worker").await?;
+let sent = producer.send(json!({"to": "user@example.com"})).await?;
 
-let metrics = client.inspect().metrics("emails");
+let consumer = queue.consumer("email-worker").await?;
+let messages = consumer.read_batch(Duration::from_secs(30), 10).await?;
+
+for message in messages {
+    if let Some(receipt_handle) = message.receipt_handle {
+        consumer.archive_message(receipt_handle).await?;
+    }
+}
 ```
 
 ## Python
@@ -37,9 +44,8 @@ for message in consumer.read_batch(vt=30, qty=10):
 
 ## What Happens Next
 
-The next implementation phase will replace request-building scaffolds with:
+The next implementation phases will add:
 
-- real `pgqrs` S3Store wiring
-- queue producer and consumer handles
 - inspection and exact metrics
+- `read_with_poll`
 - thin Python bindings into the Rust core

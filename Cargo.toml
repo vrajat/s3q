@@ -18,3 +18,5 @@ default = []
 pgqrs-integration = []
 
 [dependencies]
+pgqrs = { path = "../pgqrs/crates/pgqrs", default-features = false, features = ["s3"] }
+serde_json = "1.0"

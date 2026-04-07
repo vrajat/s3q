@@ -1,6 +1,6 @@
 # Rust API
 
-The Rust API is the source of truth for queue behavior. The current phase exposes the v1 handle and request vocabulary; the next phase wires those requests to `pgqrs::store::s3::S3Store`.
+The Rust API is the source of truth for queue behavior. The current phase wires the queue mutation surface to `pgqrs::store::s3::S3Store`.
 
 V1 handles:
 
@@ -27,15 +27,22 @@ The implementation must preserve `pgqrs` producer and consumer worker identity.
 Queue ownership shape:
 
 ```rust
-let client = s3q::connect("s3://bucket/queues.db");
+use serde_json::json;
+use std::time::Duration;
+
+let client = s3q::connect("s3://bucket/queues.db").await?;
 let queue = client.queue("emails");
 
-let producer = queue.producer("api-worker");
-let send = producer.send(br#"{"to":"user@example.com"}"#.to_vec());
+queue.create_queue().await?;
 
-let consumer = queue.consumer("email-worker");
-let read = consumer.read_batch(std::time::Duration::from_secs(30), 10);
+let producer = queue.producer("api-worker").await?;
+let sent = producer.send(json!({"to": "user@example.com"})).await?;
+
+let consumer = queue.consumer("email-worker").await?;
+let messages = consumer.read_batch(Duration::from_secs(30), 10).await?;
 ```
+
+`read_with_poll` remains planned for the dedicated polling phase. The implementation must use `pgqrs` polling support rather than a separate polling engine in `s3q`.
 
 Inspection is separate:
 

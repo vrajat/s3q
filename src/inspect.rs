@@ -127,17 +127,18 @@ impl ListArchivedMessagesRequest {
 
 #[cfg(test)]
 mod tests {
-    use crate::{connect, MessageState};
+    use crate::{ListMessagesRequest, MessageState};
 
     #[test]
     fn inspection_requests_are_queue_scoped() {
-        let client = connect("s3://bucket/queue.db");
-
-        let request = client
-            .inspect()
-            .list_messages("emails")
-            .with_state(MessageState::Archived)
-            .with_limit(10);
+        let request = ListMessagesRequest {
+            queue_name: "emails".to_string(),
+            state: None,
+            limit: None,
+            cursor: None,
+        }
+        .with_state(MessageState::Archived)
+        .with_limit(10);
 
         assert_eq!(request.queue_name, "emails");
         assert_eq!(request.state, Some(MessageState::Archived));

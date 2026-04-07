@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::{types::ReceiptHandle, Client};
+use serde_json::Value;
+
+use crate::{types::ReceiptHandle, Client, ConsumerInfo, Message, ProducerInfo, QueueInfo, Result};
 
 #[derive(Debug, Clone)]
 pub struct QueueHandle<'a> {
@@ -24,38 +26,48 @@ impl<'a> QueueHandle<'a> {
         &self.client.config().namespace
     }
 
-    pub fn create_queue(&self) -> CreateQueueRequest {
-        CreateQueueRequest {
-            queue_name: self.name.clone(),
-        }
+    pub async fn create_queue(&self) -> Result<QueueInfo> {
+        self.client.adapter().create_queue(&self.name).await
     }
 
-    pub fn delete_queue(&self) -> DeleteQueueRequest {
-        DeleteQueueRequest {
-            queue_name: self.name.clone(),
-        }
+    pub async fn delete_queue(&self) -> Result<()> {
+        self.client.adapter().delete_queue(&self.name).await
     }
 
-    pub fn purge_queue(&self) -> PurgeQueueRequest {
-        PurgeQueueRequest {
-            queue_name: self.name.clone(),
-        }
+    pub async fn purge_queue(&self) -> Result<()> {
+        self.client.adapter().purge_queue(&self.name).await
     }
 
-    pub fn producer(&self, worker_id: impl Into<String>) -> Producer<'a> {
-        Producer {
+    pub async fn producer(&self, worker_id: impl Into<String>) -> Result<Producer<'a>> {
+        let worker_id = worker_id.into();
+        let bound = self
+            .client
+            .adapter()
+            .producer(&self.name, &worker_id)
+            .await?;
+
+        Ok(Producer {
             client: self.client,
             queue_name: self.name.clone(),
-            worker_id: worker_id.into(),
-        }
+            worker_id,
+            bound,
+        })
     }
 
-    pub fn consumer(&self, worker_id: impl Into<String>) -> Consumer<'a> {
-        Consumer {
+    pub async fn consumer(&self, worker_id: impl Into<String>) -> Result<Consumer<'a>> {
+        let worker_id = worker_id.into();
+        let bound = self
+            .client
+            .adapter()
+            .consumer(&self.name, &worker_id)
+            .await?;
+
+        Ok(Consumer {
             client: self.client,
             queue_name: self.name.clone(),
-            worker_id: worker_id.into(),
-        }
+            worker_id,
+            bound,
+        })
     }
 }
 
@@ -64,6 +76,7 @@ pub struct Producer<'a> {
     client: &'a Client,
     queue_name: String,
     worker_id: String,
+    bound: crate::pgqrs::BoundProducer,
 }
 
 impl<'a> Producer<'a> {
@@ -79,22 +92,34 @@ impl<'a> Producer<'a> {
         &self.client.config().namespace
     }
 
-    pub fn send(&self, payload: impl Into<Vec<u8>>) -> SendRequest {
-        SendRequest {
-            queue_name: self.queue_name.clone(),
-            producer_worker_id: self.worker_id.clone(),
-            payload: payload.into(),
-            delay: None,
-        }
+    pub fn info(&self) -> &ProducerInfo {
+        self.bound.info()
     }
 
-    pub fn send_batch(&self, payloads: impl Into<Vec<Vec<u8>>>) -> SendBatchRequest {
-        SendBatchRequest {
-            queue_name: self.queue_name.clone(),
-            producer_worker_id: self.worker_id.clone(),
-            payloads: payloads.into(),
-            delay: None,
-        }
+    pub async fn send(&self, payload: impl Into<Value>) -> Result<Message> {
+        self.bound.send(payload.into(), None).await
+    }
+
+    pub async fn send_delayed(
+        &self,
+        payload: impl Into<Value>,
+        delay: Duration,
+    ) -> Result<Message> {
+        self.bound.send(payload.into(), Some(delay)).await
+    }
+
+    pub async fn send_batch(&self, payloads: impl Into<Vec<Value>>) -> Result<Vec<Message>> {
+        let payloads = payloads.into();
+        self.bound.send_batch(&payloads, None).await
+    }
+
+    pub async fn send_batch_delayed(
+        &self,
+        payloads: impl Into<Vec<Value>>,
+        delay: Duration,
+    ) -> Result<Vec<Message>> {
+        let payloads = payloads.into();
+        self.bound.send_batch(&payloads, Some(delay)).await
     }
 }
 
@@ -103,6 +128,7 @@ pub struct Consumer<'a> {
     client: &'a Client,
     queue_name: String,
     worker_id: String,
+    bound: crate::pgqrs::BoundConsumer,
 }
 
 impl<'a> Consumer<'a> {
@@ -118,224 +144,68 @@ impl<'a> Consumer<'a> {
         &self.client.config().namespace
     }
 
-    pub fn read(&self, vt: Duration) -> ReadRequest {
-        ReadRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            vt,
-        }
+    pub fn info(&self) -> &ConsumerInfo {
+        self.bound.info()
     }
 
-    pub fn read_batch(&self, vt: Duration, qty: usize) -> ReadBatchRequest {
-        ReadBatchRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            vt,
-            qty,
-        }
+    pub async fn read(&self, vt: Duration) -> Result<Option<Message>> {
+        self.bound.read(vt).await
     }
 
-    pub fn read_with_poll(
+    pub async fn read_batch(&self, vt: Duration, qty: usize) -> Result<Vec<Message>> {
+        self.bound.read_batch(vt, qty).await
+    }
+
+    pub async fn read_with_poll(
         &self,
         vt: Duration,
         qty: usize,
         poll_timeout: Duration,
         poll_interval: Duration,
-    ) -> ReadWithPollRequest {
-        ReadWithPollRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            vt,
-            qty,
-            poll_timeout,
-            poll_interval,
-        }
+    ) -> Result<Vec<Message>> {
+        let _ = (vt, qty, poll_timeout, poll_interval);
+        Err(crate::Error::NotImplemented(
+            "read_with_poll is wired in Phase 4 using pgqrs polling support",
+        ))
     }
 
-    pub fn delete_message(&self, receipt_handle: impl Into<ReceiptHandle>) -> DeleteMessageRequest {
-        DeleteMessageRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            receipt_handle: receipt_handle.into(),
-        }
+    pub async fn delete_message(&self, receipt_handle: impl Into<ReceiptHandle>) -> Result<bool> {
+        self.bound.delete_message(&receipt_handle.into()).await
     }
 
-    pub fn archive_message(
+    pub async fn archive_message(
         &self,
         receipt_handle: impl Into<ReceiptHandle>,
-    ) -> ArchiveMessageRequest {
-        ArchiveMessageRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            receipt_handle: receipt_handle.into(),
-        }
+    ) -> Result<Option<Message>> {
+        self.bound.archive_message(&receipt_handle.into()).await
     }
 
-    pub fn archive_messages(
+    pub async fn archive_messages(
         &self,
         receipt_handles: impl Into<Vec<ReceiptHandle>>,
-    ) -> ArchiveMessagesRequest {
-        ArchiveMessagesRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            receipt_handles: receipt_handles.into(),
-        }
+    ) -> Result<Vec<bool>> {
+        self.bound.archive_messages(&receipt_handles.into()).await
     }
 
-    pub fn set_vt(
+    pub async fn set_vt(
         &self,
         receipt_handle: impl Into<ReceiptHandle>,
         vt: Duration,
-    ) -> SetVisibilityTimeoutRequest {
-        SetVisibilityTimeoutRequest {
-            queue_name: self.queue_name.clone(),
-            consumer_worker_id: self.worker_id.clone(),
-            receipt_handle: receipt_handle.into(),
-            vt,
-        }
+    ) -> Result<bool> {
+        self.bound.set_vt(&receipt_handle.into(), vt).await
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateQueueRequest {
-    pub queue_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeleteQueueRequest {
-    pub queue_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PurgeQueueRequest {
-    pub queue_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SendRequest {
-    pub queue_name: String,
-    pub producer_worker_id: String,
-    pub payload: Vec<u8>,
-    pub delay: Option<Duration>,
-}
-
-impl SendRequest {
-    pub fn with_delay(mut self, delay: Duration) -> Self {
-        self.delay = Some(delay);
-        self
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SendBatchRequest {
-    pub queue_name: String,
-    pub producer_worker_id: String,
-    pub payloads: Vec<Vec<u8>>,
-    pub delay: Option<Duration>,
-}
-
-impl SendBatchRequest {
-    pub fn with_delay(mut self, delay: Duration) -> Self {
-        self.delay = Some(delay);
-        self
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub vt: Duration,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadBatchRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub vt: Duration,
-    pub qty: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadWithPollRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub vt: Duration,
-    pub qty: usize,
-    pub poll_timeout: Duration,
-    pub poll_interval: Duration,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeleteMessageRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub receipt_handle: ReceiptHandle,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArchiveMessageRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub receipt_handle: ReceiptHandle,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArchiveMessagesRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub receipt_handles: Vec<ReceiptHandle>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SetVisibilityTimeoutRequest {
-    pub queue_name: String,
-    pub consumer_worker_id: String,
-    pub receipt_handle: ReceiptHandle,
-    pub vt: Duration,
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use crate::{connect, ReceiptHandle};
+    use crate::ReceiptHandle;
 
     #[test]
-    fn producer_requests_capture_queue_and_worker() {
-        let client = connect("s3://bucket/queue.db");
-        let producer = client.queue("emails").producer("api-worker");
+    fn receipt_handles_round_trip_message_and_worker_ids() {
+        let receipt = ReceiptHandle::from_parts(42, 7);
+        let decoded = receipt.decode().expect("receipt should decode");
 
-        let request = producer.send(b"hello".to_vec());
-
-        assert_eq!(request.queue_name, "emails");
-        assert_eq!(request.producer_worker_id, "api-worker");
-        assert_eq!(request.payload, b"hello".to_vec());
-    }
-
-    #[test]
-    fn consumer_requests_capture_queue_worker_and_receipt() {
-        let client = connect("s3://bucket/queue.db");
-        let consumer = client.queue("emails").consumer("worker-a");
-
-        let receipt = ReceiptHandle::new("opaque-lease-token");
-        let request = consumer.set_vt(receipt.clone(), Duration::from_secs(60));
-
-        assert_eq!(request.queue_name, "emails");
-        assert_eq!(request.consumer_worker_id, "worker-a");
-        assert_eq!(request.receipt_handle, receipt);
-        assert_eq!(request.vt, Duration::from_secs(60));
-    }
-
-    #[test]
-    fn read_batch_uses_pgmq_vocabulary() {
-        let client = connect("s3://bucket/queue.db");
-        let consumer = client.queue("emails").consumer("worker-a");
-
-        let request = consumer.read_batch(Duration::from_secs(30), 8);
-
-        assert_eq!(request.queue_name, "emails");
-        assert_eq!(request.qty, 8);
-        assert_eq!(request.vt, Duration::from_secs(30));
+        assert_eq!(decoded.message_id, 42);
+        assert_eq!(decoded.worker_id, 7);
     }
 }
