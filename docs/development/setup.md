@@ -17,4 +17,4 @@ Useful tasks:
 - `make docs-build`
 - `make docs-serve`
 
-Docs are built with Zensical, not MkDocs.
+Docs are served and built with Zensical, not MkDocs. `make docs` starts the local dev server; `make docs-build` builds the static site.

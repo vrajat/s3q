@@ -39,7 +39,7 @@ mise exec -- make test
 mise exec -- make docs
 ```
 
-The `Makefile` remains the task entrypoint. `mise` pins tool versions and is used by CI.
+The `Makefile` remains the task entrypoint. `mise` pins tool versions and is used by CI. `make docs` starts the local Zensical dev server; CI uses `make docs-build`.
 
 ## First Documents
 

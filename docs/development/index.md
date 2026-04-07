@@ -20,6 +20,8 @@ mise exec -- make test
 mise exec -- make docs
 ```
 
+`make docs` starts the local Zensical dev server. Use `make docs-build` for CI-style static site validation.
+
 ## Expected Evolution
 
 1. Keep the repository baseline stable.
