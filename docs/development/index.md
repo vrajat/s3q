@@ -17,7 +17,7 @@ Use `mise` for tool versions and `make` for tasks:
 mise install
 mise exec -- make check
 mise exec -- make test
-mise exec -- make docs-build
+mise exec -- make docs
 ```
 
 ## Expected Evolution

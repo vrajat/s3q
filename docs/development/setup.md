@@ -13,6 +13,7 @@ Useful tasks:
 - `make test`
 - `make test-rust`
 - `make test-py`
+- `make docs`
 - `make docs-build`
 - `make docs-serve`
 

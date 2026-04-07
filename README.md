@@ -36,7 +36,7 @@ This repository is currently in the **seed stage**. The code in `src/` and `pyth
 mise install
 mise exec -- make check
 mise exec -- make test
-mise exec -- make docs-build
+mise exec -- make docs
 ```
 
 The `Makefile` remains the task entrypoint. `mise` pins tool versions and is used by CI.

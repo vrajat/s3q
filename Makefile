@@ -39,6 +39,9 @@ test-py:
 docs-build:
 	$(UV) run --with zensical $(ZENSICAL) build
 
+.PHONY: docs
+docs: docs-build
+
 .PHONY: docs-serve
 docs-serve:
 	$(UV) run --with zensical $(ZENSICAL) serve
