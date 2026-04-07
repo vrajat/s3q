@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::{backend::Backend, config::ClientConfig, inspect::Inspect, queue::Queue, Result};
+use pgqrs::store::Store as _;
+
+use crate::{config::ClientConfig, inspect::Inspect, queue::Queue, store::StoreState, Result};
 
 #[derive(Debug, Clone)]
 /// Top-level s3q client.
@@ -9,7 +11,7 @@ use crate::{backend::Backend, config::ClientConfig, inspect::Inspect, queue::Que
 /// inspection handles.
 pub struct Client {
     config: ClientConfig,
-    backend: Arc<Backend>,
+    store: Arc<StoreState>,
 }
 
 impl Client {
@@ -23,8 +25,8 @@ impl Client {
 
     /// Connect to s3q using an explicit client configuration.
     pub async fn connect_with_config(config: ClientConfig) -> Result<Self> {
-        let backend = Backend::connect(&config).await?;
-        Ok(Self { config, backend })
+        let store = StoreState::connect(&config).await?;
+        Ok(Self { config, store })
     }
 
     /// Return the configuration used by this client.
@@ -35,7 +37,7 @@ impl Client {
     /// Create a queue and return a queue-scoped handle for it.
     pub async fn create_queue(&self, name: impl Into<String>) -> Result<Queue> {
         let name = name.into();
-        self.backend.create_queue(&name).await?;
+        self.store.s3.queue(&name).await?;
         Ok(self.queue(name))
     }
 
@@ -44,12 +46,13 @@ impl Client {
     /// Deletion fails if the backing queue still has messages or associated
     /// workers that prevent safe deletion.
     pub async fn delete_queue(&self, name: impl AsRef<str>) -> Result<()> {
-        self.backend.delete_queue(name.as_ref()).await
+        let queue = self.store.s3.queues().get_by_name(name.as_ref()).await?;
+        Ok(self.store.admin.delete_queue(&queue).await?)
     }
 
     /// Purge messages from a queue while keeping the queue itself.
     pub async fn purge_queue(&self, name: impl AsRef<str>) -> Result<()> {
-        self.backend.purge_queue(name.as_ref()).await
+        Ok(self.store.admin.purge_queue(name.as_ref()).await?)
     }
 
     /// Return a queue handle for a queue name.
@@ -57,7 +60,7 @@ impl Client {
     /// This does not create the queue. Call [`Client::create_queue`] when
     /// provisioning queues.
     pub fn queue(&self, name: impl Into<String>) -> Queue {
-        Queue::new(self.backend.clone(), name, self.config.namespace.clone())
+        Queue::new(self.store.clone(), name, self.config.namespace.clone())
     }
 
     /// Return a read-only inspection handle.

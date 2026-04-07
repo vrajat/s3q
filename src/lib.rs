@@ -5,12 +5,12 @@
 
 #![warn(missing_docs)]
 
-mod backend;
 mod client;
 mod config;
 mod error;
 mod inspect;
 mod queue;
+mod store;
 mod types;
 
 pub use client::{connect, Client};

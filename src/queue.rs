@@ -3,26 +3,26 @@ use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
 
-use crate::{backend::Backend, types::ReceiptHandle, Error, Message, MessageState, Result};
+use crate::{store::StoreState, types::ReceiptHandle, Error, Message, MessageState, Result};
 
 #[derive(Debug, Clone)]
 /// Queue-scoped handle.
 ///
 /// A queue creates producer and consumer handles for a specific queue name.
 pub struct Queue {
-    backend: Arc<Backend>,
+    store: Arc<StoreState>,
     name: String,
     namespace: String,
 }
 
 impl Queue {
     pub(crate) fn new(
-        backend: Arc<Backend>,
+        store: Arc<StoreState>,
         name: impl Into<String>,
         namespace: impl Into<String>,
     ) -> Self {
         Self {
-            backend,
+            store,
             name: name.into(),
             namespace: namespace.into(),
         }
@@ -44,7 +44,9 @@ impl Queue {
     /// producer during incident review.
     pub async fn producer(&self, worker_id: impl Into<String>) -> Result<Producer> {
         let worker_id = worker_id.into();
-        let producer = self.backend.producer(&self.name, &worker_id).await?;
+        let producer = pgqrs::producer(&worker_id, &self.name)
+            .create(&self.store.s3)
+            .await?;
 
         Ok(Producer {
             queue_name: self.name.clone(),
@@ -60,7 +62,9 @@ impl Queue {
     /// consumer that owned them.
     pub async fn consumer(&self, worker_id: impl Into<String>) -> Result<Consumer> {
         let worker_id = worker_id.into();
-        let consumer = self.backend.consumer(&self.name, &worker_id).await?;
+        let consumer = pgqrs::consumer(&worker_id, &self.name)
+            .create(&self.store.s3)
+            .await?;
 
         Ok(Consumer {
             queue_name: self.name.clone(),
