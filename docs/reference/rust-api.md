@@ -20,7 +20,7 @@ let client = s3q::Client::connect_with_config(config).await?;
 
 | Method | Description |
 | --- | --- |
-| `client.create_queue(name).await` | Create the queue |
+| `client.create_queue(name).await` | Create the queue and return `Queue` |
 | `client.purge_queue(name).await` | Remove active queue contents |
 | `client.delete_queue(name).await` | Delete the queue |
 | `client.queue(name)` | Create a queue-scoped handle |

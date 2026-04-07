@@ -110,13 +110,6 @@ pub struct Message {
 pub type ArchivedMessage = Message;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// Queue metadata.
-pub struct QueueInfo {
-    /// Queue name.
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 /// Metrics snapshot for a queue.
 pub struct QueueMetrics {
     /// Queue name.

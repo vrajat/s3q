@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pgqrs::store::{s3::S3Store, Store};
 
-use crate::{ClientConfig, Error, QueueInfo, Result};
+use crate::{ClientConfig, Error, Result};
 
 #[derive(Debug)]
 pub(crate) struct Backend {
@@ -28,11 +28,9 @@ impl Backend {
         Ok(Arc::new(Self { store, admin }))
     }
 
-    pub(crate) async fn create_queue(&self, queue_name: &str) -> Result<QueueInfo> {
-        let record = self.store.queue(queue_name).await?;
-        Ok(QueueInfo {
-            name: record.queue_name,
-        })
+    pub(crate) async fn create_queue(&self, queue_name: &str) -> Result<()> {
+        self.store.queue(queue_name).await?;
+        Ok(())
     }
 
     pub(crate) async fn delete_queue(&self, queue_name: &str) -> Result<()> {

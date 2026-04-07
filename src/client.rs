@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    backend::Backend, config::ClientConfig, inspect::Inspect, queue::Queue, QueueInfo, Result,
-};
+use crate::{backend::Backend, config::ClientConfig, inspect::Inspect, queue::Queue, Result};
 
 #[derive(Debug, Clone)]
 /// Top-level s3q client.
@@ -34,9 +32,11 @@ impl Client {
         &self.config
     }
 
-    /// Create a queue.
-    pub async fn create_queue(&self, name: impl AsRef<str>) -> Result<QueueInfo> {
-        self.backend.create_queue(name.as_ref()).await
+    /// Create a queue and return a queue-scoped handle for it.
+    pub async fn create_queue(&self, name: impl Into<String>) -> Result<Queue> {
+        let name = name.into();
+        self.backend.create_queue(&name).await?;
+        Ok(self.queue(name))
     }
 
     /// Delete a queue.

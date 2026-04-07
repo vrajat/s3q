@@ -23,8 +23,7 @@ let client = s3q::Client::connect_with_config(config).await?;
 ## Queue
 
 ```rust
-client.create_queue("emails").await?;
-let queue = client.queue("emails");
+let queue = client.create_queue("emails").await?;
 ```
 
 Create producers and consumers from the queue:

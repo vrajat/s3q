@@ -209,14 +209,9 @@ The Rust API should expose stable product-facing types.
 
 Recommended v1 types:
 
-- `QueueInfo`
 - `QueueMetrics`
-- `ProducerInfo`
-- `ConsumerInfo`
 - `Message`
 - `ArchivedMessage`
-- `ReadRequest`
-- `ReadBatchRequest`
 - `ListMessagesRequest`
 - `ListArchivedMessagesRequest`
 - `MessageState`
@@ -344,7 +339,6 @@ Recommended methods:
 
 Recommended Python dataclasses or binding-backed objects:
 
-- `QueueInfo`
 - `QueueMetrics`
 - `Message`
 - `MessageState`

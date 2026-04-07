@@ -38,8 +38,8 @@ class Client:
         """Return the client configuration."""
         return self._config
 
-    def create_queue(self, name: str) -> None:
-        """Create a queue."""
+    def create_queue(self, name: str) -> Queue:
+        """Create a queue and return a queue handle."""
         _ = name
         raise NotReadyError("client.create_queue is not wired to the Rust core yet")
 

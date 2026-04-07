@@ -21,4 +21,4 @@ pub use inspect::{
     ListQueuesRequest, MetricsAllRequest, MetricsRequest,
 };
 pub use queue::{Consumer, Producer, Queue};
-pub use types::{ArchivedMessage, Message, MessageState, QueueInfo, QueueMetrics, ReceiptHandle};
+pub use types::{ArchivedMessage, Message, MessageState, QueueMetrics, ReceiptHandle};

@@ -30,9 +30,7 @@ use std::time::Duration;
 
 async fn run() -> s3q::Result<()> {
     let client = s3q::connect("s3://my-bucket/queues/app.db").await?;
-    client.create_queue("emails").await?;
-
-    let queue = client.queue("emails");
+    let queue = client.create_queue("emails").await?;
     let producer = queue.producer("api").await?;
     producer
         .send(json!({
