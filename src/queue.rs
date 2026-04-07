@@ -1,66 +1,25 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use crate::Client;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QueueAttributes {
-    pub visibility_timeout: Duration,
-    pub retention_period: Duration,
-    pub max_receive_count: u32,
-    pub fifo: bool,
-    pub content_based_deduplication: bool,
-}
-
-impl Default for QueueAttributes {
-    fn default() -> Self {
-        Self {
-            visibility_timeout: Duration::from_secs(30),
-            retention_period: Duration::from_secs(60 * 60 * 24 * 4),
-            max_receive_count: 16,
-            fifo: false,
-            content_based_deduplication: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReceivedMessage {
-    pub message_id: String,
-    pub receipt_handle: String,
-    pub body: Vec<u8>,
-    pub receive_count: u32,
-    pub leased_until: Option<SystemTime>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct QueueApi<'a> {
-    client: &'a Client,
-}
-
-impl<'a> QueueApi<'a> {
-    pub(crate) fn new(client: &'a Client) -> Self {
-        Self { client }
-    }
-
-    pub fn namespace(&self) -> &str {
-        &self.client.config().namespace
-    }
-
-    pub fn queue(&self, name: impl Into<String>) -> QueueHandle<'a> {
-        QueueHandle {
-            client: self.client,
-            name: name.into(),
-        }
-    }
-}
+use crate::{types::ReceiptHandle, Client};
 
 #[derive(Debug, Clone)]
 pub struct QueueHandle<'a> {
     client: &'a Client,
-    pub name: String,
+    name: String,
 }
 
 impl<'a> QueueHandle<'a> {
+    pub(crate) fn new(client: &'a Client, name: impl Into<String>) -> Self {
+        Self {
+            client,
+            name: name.into(),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn namespace(&self) -> &str {
         &self.client.config().namespace
     }
@@ -68,7 +27,6 @@ impl<'a> QueueHandle<'a> {
     pub fn create_queue(&self) -> CreateQueueRequest {
         CreateQueueRequest {
             queue_name: self.name.clone(),
-            attributes: QueueAttributes::default(),
         }
     }
 
@@ -84,60 +42,156 @@ impl<'a> QueueHandle<'a> {
         }
     }
 
-    pub fn get_queue_attributes(&self) -> GetQueueAttributesRequest {
-        GetQueueAttributesRequest {
+    pub fn producer(&self, worker_id: impl Into<String>) -> Producer<'a> {
+        Producer {
+            client: self.client,
             queue_name: self.name.clone(),
+            worker_id: worker_id.into(),
         }
     }
 
-    pub fn set_queue_attributes(&self, attributes: QueueAttributes) -> SetQueueAttributesRequest {
-        SetQueueAttributesRequest {
+    pub fn consumer(&self, worker_id: impl Into<String>) -> Consumer<'a> {
+        Consumer {
+            client: self.client,
             queue_name: self.name.clone(),
-            attributes,
+            worker_id: worker_id.into(),
         }
     }
+}
 
-    pub fn send_message(&self, body: impl Into<Vec<u8>>) -> SendMessageRequest {
-        SendMessageRequest {
-            queue_name: self.name.clone(),
-            body: body.into(),
+#[derive(Debug, Clone)]
+pub struct Producer<'a> {
+    client: &'a Client,
+    queue_name: String,
+    worker_id: String,
+}
+
+impl<'a> Producer<'a> {
+    pub fn queue_name(&self) -> &str {
+        &self.queue_name
+    }
+
+    pub fn worker_id(&self) -> &str {
+        &self.worker_id
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.client.config().namespace
+    }
+
+    pub fn send(&self, payload: impl Into<Vec<u8>>) -> SendRequest {
+        SendRequest {
+            queue_name: self.queue_name.clone(),
+            producer_worker_id: self.worker_id.clone(),
+            payload: payload.into(),
             delay: None,
         }
     }
 
-    pub fn send_message_batch(&self, bodies: impl Into<Vec<Vec<u8>>>) -> SendMessageBatchRequest {
-        SendMessageBatchRequest {
-            queue_name: self.name.clone(),
-            bodies: bodies.into(),
+    pub fn send_batch(&self, payloads: impl Into<Vec<Vec<u8>>>) -> SendBatchRequest {
+        SendBatchRequest {
+            queue_name: self.queue_name.clone(),
+            producer_worker_id: self.worker_id.clone(),
+            payloads: payloads.into(),
             delay: None,
         }
     }
+}
 
-    pub fn receive_messages(&self) -> ReceiveMessagesRequest {
-        ReceiveMessagesRequest {
-            queue_name: self.name.clone(),
-            max_messages: 1,
-            visibility_timeout: None,
-            wait_time: None,
+#[derive(Debug, Clone)]
+pub struct Consumer<'a> {
+    client: &'a Client,
+    queue_name: String,
+    worker_id: String,
+}
+
+impl<'a> Consumer<'a> {
+    pub fn queue_name(&self) -> &str {
+        &self.queue_name
+    }
+
+    pub fn worker_id(&self) -> &str {
+        &self.worker_id
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.client.config().namespace
+    }
+
+    pub fn read(&self, vt: Duration) -> ReadRequest {
+        ReadRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
+            vt,
         }
     }
 
-    pub fn delete_message(&self, receipt_handle: impl Into<String>) -> DeleteMessageRequest {
-        DeleteMessageRequest {
-            queue_name: self.name.clone(),
-            receipt_handle: receipt_handle.into(),
+    pub fn read_batch(&self, vt: Duration, qty: usize) -> ReadBatchRequest {
+        ReadBatchRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
+            vt,
+            qty,
         }
     }
 
-    pub fn change_message_visibility(
+    pub fn read_with_poll(
         &self,
-        receipt_handle: impl Into<String>,
-        visibility_timeout: Duration,
-    ) -> ChangeMessageVisibilityRequest {
-        ChangeMessageVisibilityRequest {
-            queue_name: self.name.clone(),
+        vt: Duration,
+        qty: usize,
+        poll_timeout: Duration,
+        poll_interval: Duration,
+    ) -> ReadWithPollRequest {
+        ReadWithPollRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
+            vt,
+            qty,
+            poll_timeout,
+            poll_interval,
+        }
+    }
+
+    pub fn delete_message(&self, receipt_handle: impl Into<ReceiptHandle>) -> DeleteMessageRequest {
+        DeleteMessageRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
             receipt_handle: receipt_handle.into(),
-            visibility_timeout,
+        }
+    }
+
+    pub fn archive_message(
+        &self,
+        receipt_handle: impl Into<ReceiptHandle>,
+    ) -> ArchiveMessageRequest {
+        ArchiveMessageRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
+            receipt_handle: receipt_handle.into(),
+        }
+    }
+
+    pub fn archive_messages(
+        &self,
+        receipt_handles: impl Into<Vec<ReceiptHandle>>,
+    ) -> ArchiveMessagesRequest {
+        ArchiveMessagesRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
+            receipt_handles: receipt_handles.into(),
+        }
+    }
+
+    pub fn set_vt(
+        &self,
+        receipt_handle: impl Into<ReceiptHandle>,
+        vt: Duration,
+    ) -> SetVisibilityTimeoutRequest {
+        SetVisibilityTimeoutRequest {
+            queue_name: self.queue_name.clone(),
+            consumer_worker_id: self.worker_id.clone(),
+            receipt_handle: receipt_handle.into(),
+            vt,
         }
     }
 }
@@ -145,7 +199,6 @@ impl<'a> QueueHandle<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateQueueRequest {
     pub queue_name: String,
-    pub attributes: QueueAttributes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,24 +212,14 @@ pub struct PurgeQueueRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GetQueueAttributesRequest {
+pub struct SendRequest {
     pub queue_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SetQueueAttributesRequest {
-    pub queue_name: String,
-    pub attributes: QueueAttributes,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SendMessageRequest {
-    pub queue_name: String,
-    pub body: Vec<u8>,
+    pub producer_worker_id: String,
+    pub payload: Vec<u8>,
     pub delay: Option<Duration>,
 }
 
-impl SendMessageRequest {
+impl SendRequest {
     pub fn with_delay(mut self, delay: Duration) -> Self {
         self.delay = Some(delay);
         self
@@ -184,13 +227,14 @@ impl SendMessageRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SendMessageBatchRequest {
+pub struct SendBatchRequest {
     pub queue_name: String,
-    pub bodies: Vec<Vec<u8>>,
+    pub producer_worker_id: String,
+    pub payloads: Vec<Vec<u8>>,
     pub delay: Option<Duration>,
 }
 
-impl SendMessageBatchRequest {
+impl SendBatchRequest {
     pub fn with_delay(mut self, delay: Duration) -> Self {
         self.delay = Some(delay);
         self
@@ -198,67 +242,100 @@ impl SendMessageBatchRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReceiveMessagesRequest {
+pub struct ReadRequest {
     pub queue_name: String,
-    pub max_messages: usize,
-    pub visibility_timeout: Option<Duration>,
-    pub wait_time: Option<Duration>,
+    pub consumer_worker_id: String,
+    pub vt: Duration,
 }
 
-impl ReceiveMessagesRequest {
-    pub fn with_max_messages(mut self, max_messages: usize) -> Self {
-        self.max_messages = max_messages;
-        self
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadBatchRequest {
+    pub queue_name: String,
+    pub consumer_worker_id: String,
+    pub vt: Duration,
+    pub qty: usize,
+}
 
-    pub fn with_visibility_timeout(mut self, visibility_timeout: Duration) -> Self {
-        self.visibility_timeout = Some(visibility_timeout);
-        self
-    }
-
-    pub fn with_wait_time(mut self, wait_time: Duration) -> Self {
-        self.wait_time = Some(wait_time);
-        self
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadWithPollRequest {
+    pub queue_name: String,
+    pub consumer_worker_id: String,
+    pub vt: Duration,
+    pub qty: usize,
+    pub poll_timeout: Duration,
+    pub poll_interval: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeleteMessageRequest {
     pub queue_name: String,
-    pub receipt_handle: String,
+    pub consumer_worker_id: String,
+    pub receipt_handle: ReceiptHandle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChangeMessageVisibilityRequest {
+pub struct ArchiveMessageRequest {
     pub queue_name: String,
-    pub receipt_handle: String,
-    pub visibility_timeout: Duration,
+    pub consumer_worker_id: String,
+    pub receipt_handle: ReceiptHandle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchiveMessagesRequest {
+    pub queue_name: String,
+    pub consumer_worker_id: String,
+    pub receipt_handles: Vec<ReceiptHandle>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetVisibilityTimeoutRequest {
+    pub queue_name: String,
+    pub consumer_worker_id: String,
+    pub receipt_handle: ReceiptHandle,
+    pub vt: Duration,
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use crate::connect;
-
-    use super::QueueAttributes;
+    use crate::{connect, ReceiptHandle};
 
     #[test]
-    fn queue_attributes_defaults_match_mvp_expectations() {
-        let attributes = QueueAttributes::default();
+    fn producer_requests_capture_queue_and_worker() {
+        let client = connect("s3://bucket/queue.db");
+        let producer = client.queue("emails").producer("api-worker");
 
-        assert_eq!(attributes.visibility_timeout, Duration::from_secs(30));
-        assert!(!attributes.fifo);
+        let request = producer.send(b"hello".to_vec());
+
+        assert_eq!(request.queue_name, "emails");
+        assert_eq!(request.producer_worker_id, "api-worker");
+        assert_eq!(request.payload, b"hello".to_vec());
     }
 
     #[test]
-    fn queue_requests_capture_queue_name() {
+    fn consumer_requests_capture_queue_worker_and_receipt() {
         let client = connect("s3://bucket/queue.db");
-        let queue = client.queues().queue("emails");
+        let consumer = client.queue("emails").consumer("worker-a");
 
-        let request = queue.receive_messages().with_max_messages(8);
+        let receipt = ReceiptHandle::new("opaque-lease-token");
+        let request = consumer.set_vt(receipt.clone(), Duration::from_secs(60));
 
         assert_eq!(request.queue_name, "emails");
-        assert_eq!(request.max_messages, 8);
+        assert_eq!(request.consumer_worker_id, "worker-a");
+        assert_eq!(request.receipt_handle, receipt);
+        assert_eq!(request.vt, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn read_batch_uses_pgmq_vocabulary() {
+        let client = connect("s3://bucket/queue.db");
+        let consumer = client.queue("emails").consumer("worker-a");
+
+        let request = consumer.read_batch(Duration::from_secs(30), 8);
+
+        assert_eq!(request.queue_name, "emails");
+        assert_eq!(request.qty, 8);
+        assert_eq!(request.vt, Duration::from_secs(30));
     }
 }

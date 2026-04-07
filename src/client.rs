@@ -1,4 +1,4 @@
-use crate::{config::ClientConfig, queue::QueueApi, workflow::WorkflowApi};
+use crate::{config::ClientConfig, inspect::Inspect, queue::QueueHandle};
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -10,19 +10,23 @@ impl Client {
         Self { config }
     }
 
+    pub fn connect(dsn: impl Into<String>) -> Self {
+        Self::new(ClientConfig::new(dsn))
+    }
+
     pub fn config(&self) -> &ClientConfig {
         &self.config
     }
 
-    pub fn queues(&self) -> QueueApi<'_> {
-        QueueApi::new(self)
+    pub fn queue(&self, name: impl Into<String>) -> QueueHandle<'_> {
+        QueueHandle::new(self, name)
     }
 
-    pub fn workflows(&self) -> WorkflowApi<'_> {
-        WorkflowApi::new(self)
+    pub fn inspect(&self) -> Inspect<'_> {
+        Inspect::new(self)
     }
 }
 
 pub fn connect(dsn: impl Into<String>) -> Client {
-    Client::new(ClientConfig::new(dsn))
+    Client::connect(dsn)
 }
