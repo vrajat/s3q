@@ -1,20 +1,27 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::{types::ReceiptHandle, Client, ConsumerInfo, Message, ProducerInfo, QueueInfo, Result};
+use crate::{pgqrs_adapter::PgqrsAdapter, types::ReceiptHandle, Message, QueueInfo, Result};
 
 #[derive(Debug, Clone)]
-pub struct QueueHandle<'a> {
-    client: &'a Client,
+pub struct QueueHandle {
+    adapter: Arc<PgqrsAdapter>,
     name: String,
+    namespace: String,
 }
 
-impl<'a> QueueHandle<'a> {
-    pub(crate) fn new(client: &'a Client, name: impl Into<String>) -> Self {
+impl QueueHandle {
+    pub(crate) fn new(
+        adapter: Arc<PgqrsAdapter>,
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+    ) -> Self {
         Self {
-            client,
+            adapter,
             name: name.into(),
+            namespace: namespace.into(),
         }
     }
 
@@ -23,63 +30,55 @@ impl<'a> QueueHandle<'a> {
     }
 
     pub fn namespace(&self) -> &str {
-        &self.client.config().namespace
+        &self.namespace
     }
 
     pub async fn create_queue(&self) -> Result<QueueInfo> {
-        self.client.adapter().create_queue(&self.name).await
+        self.adapter.create_queue(&self.name).await
     }
 
     pub async fn delete_queue(&self) -> Result<()> {
-        self.client.adapter().delete_queue(&self.name).await
+        self.adapter.delete_queue(&self.name).await
     }
 
     pub async fn purge_queue(&self) -> Result<()> {
-        self.client.adapter().purge_queue(&self.name).await
+        self.adapter.purge_queue(&self.name).await
     }
 
-    pub async fn producer(&self, worker_id: impl Into<String>) -> Result<Producer<'a>> {
+    pub async fn producer(&self, worker_id: impl Into<String>) -> Result<Producer> {
         let worker_id = worker_id.into();
-        let bound = self
-            .client
-            .adapter()
-            .producer(&self.name, &worker_id)
-            .await?;
+        let producer = self.adapter.producer(&self.name, &worker_id).await?;
 
         Ok(Producer {
-            client: self.client,
             queue_name: self.name.clone(),
+            namespace: self.namespace.clone(),
             worker_id,
-            bound,
+            producer,
         })
     }
 
-    pub async fn consumer(&self, worker_id: impl Into<String>) -> Result<Consumer<'a>> {
+    pub async fn consumer(&self, worker_id: impl Into<String>) -> Result<Consumer> {
         let worker_id = worker_id.into();
-        let bound = self
-            .client
-            .adapter()
-            .consumer(&self.name, &worker_id)
-            .await?;
+        let consumer = self.adapter.consumer(&self.name, &worker_id).await?;
 
         Ok(Consumer {
-            client: self.client,
             queue_name: self.name.clone(),
+            namespace: self.namespace.clone(),
             worker_id,
-            bound,
+            consumer,
         })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Producer<'a> {
-    client: &'a Client,
+pub struct Producer {
     queue_name: String,
+    namespace: String,
     worker_id: String,
-    bound: crate::pgqrs::BoundProducer,
+    producer: crate::pgqrs_adapter::Producer,
 }
 
-impl<'a> Producer<'a> {
+impl Producer {
     pub fn queue_name(&self) -> &str {
         &self.queue_name
     }
@@ -89,15 +88,11 @@ impl<'a> Producer<'a> {
     }
 
     pub fn namespace(&self) -> &str {
-        &self.client.config().namespace
-    }
-
-    pub fn info(&self) -> &ProducerInfo {
-        self.bound.info()
+        &self.namespace
     }
 
     pub async fn send(&self, payload: impl Into<Value>) -> Result<Message> {
-        self.bound.send(payload.into(), None).await
+        self.producer.send(payload.into(), None).await
     }
 
     pub async fn send_delayed(
@@ -105,12 +100,12 @@ impl<'a> Producer<'a> {
         payload: impl Into<Value>,
         delay: Duration,
     ) -> Result<Message> {
-        self.bound.send(payload.into(), Some(delay)).await
+        self.producer.send(payload.into(), Some(delay)).await
     }
 
     pub async fn send_batch(&self, payloads: impl Into<Vec<Value>>) -> Result<Vec<Message>> {
         let payloads = payloads.into();
-        self.bound.send_batch(&payloads, None).await
+        self.producer.send_batch(&payloads, None).await
     }
 
     pub async fn send_batch_delayed(
@@ -119,19 +114,19 @@ impl<'a> Producer<'a> {
         delay: Duration,
     ) -> Result<Vec<Message>> {
         let payloads = payloads.into();
-        self.bound.send_batch(&payloads, Some(delay)).await
+        self.producer.send_batch(&payloads, Some(delay)).await
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Consumer<'a> {
-    client: &'a Client,
+pub struct Consumer {
     queue_name: String,
+    namespace: String,
     worker_id: String,
-    bound: crate::pgqrs::BoundConsumer,
+    consumer: crate::pgqrs_adapter::Consumer,
 }
 
-impl<'a> Consumer<'a> {
+impl Consumer {
     pub fn queue_name(&self) -> &str {
         &self.queue_name
     }
@@ -141,19 +136,15 @@ impl<'a> Consumer<'a> {
     }
 
     pub fn namespace(&self) -> &str {
-        &self.client.config().namespace
-    }
-
-    pub fn info(&self) -> &ConsumerInfo {
-        self.bound.info()
+        &self.namespace
     }
 
     pub async fn read(&self, vt: Duration) -> Result<Option<Message>> {
-        self.bound.read(vt).await
+        self.consumer.read(vt).await
     }
 
     pub async fn read_batch(&self, vt: Duration, qty: usize) -> Result<Vec<Message>> {
-        self.bound.read_batch(vt, qty).await
+        self.consumer.read_batch(vt, qty).await
     }
 
     pub async fn read_with_poll(
@@ -170,21 +161,23 @@ impl<'a> Consumer<'a> {
     }
 
     pub async fn delete_message(&self, receipt_handle: impl Into<ReceiptHandle>) -> Result<bool> {
-        self.bound.delete_message(&receipt_handle.into()).await
+        self.consumer.delete_message(&receipt_handle.into()).await
     }
 
     pub async fn archive_message(
         &self,
         receipt_handle: impl Into<ReceiptHandle>,
     ) -> Result<Option<Message>> {
-        self.bound.archive_message(&receipt_handle.into()).await
+        self.consumer.archive_message(&receipt_handle.into()).await
     }
 
     pub async fn archive_messages(
         &self,
         receipt_handles: impl Into<Vec<ReceiptHandle>>,
     ) -> Result<Vec<bool>> {
-        self.bound.archive_messages(&receipt_handles.into()).await
+        self.consumer
+            .archive_messages(&receipt_handles.into())
+            .await
     }
 
     pub async fn set_vt(
@@ -192,7 +185,7 @@ impl<'a> Consumer<'a> {
         receipt_handle: impl Into<ReceiptHandle>,
         vt: Duration,
     ) -> Result<bool> {
-        self.bound.set_vt(&receipt_handle.into(), vt).await
+        self.consumer.set_vt(&receipt_handle.into(), vt).await
     }
 }
 

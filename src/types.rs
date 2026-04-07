@@ -110,15 +110,3 @@ pub struct QueueMetrics {
     pub archived_messages: u64,
     pub total_messages: u64,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProducerInfo {
-    pub queue_name: String,
-    pub worker_id: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsumerInfo {
-    pub queue_name: String,
-    pub worker_id: String,
-}

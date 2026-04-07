@@ -6,7 +6,7 @@ Use delayed messages when work should not become visible immediately.
 use serde_json::json;
 use std::time::Duration;
 
-async fn enqueue_reminder(producer: &s3q::Producer<'_>) -> s3q::Result<()> {
+async fn enqueue_reminder(producer: &s3q::Producer) -> s3q::Result<()> {
     producer
         .send_delayed(
             json!({
@@ -29,7 +29,7 @@ Batch delayed send is also available:
 use serde_json::json;
 use std::time::Duration;
 
-async fn enqueue_many(producer: &s3q::Producer<'_>) -> s3q::Result<()> {
+async fn enqueue_many(producer: &s3q::Producer) -> s3q::Result<()> {
     producer
         .send_batch_delayed(
             vec![

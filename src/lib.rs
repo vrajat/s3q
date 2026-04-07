@@ -1,13 +1,13 @@
-//! s3q is a thin S3-backed queue product layer over `pgqrs::store::s3::S3Store`.
+//! s3q is a small S3-backed queue library.
 //!
-//! This crate currently wires the queue mutation API to `pgqrs`. Inspection,
-//! polling, Python, and CLI surfaces are staged separately.
+//! The public API is built around queues, producers, consumers, leases, and
+//! read-only inspection.
 
 mod client;
 mod config;
 mod error;
 mod inspect;
-mod pgqrs;
+mod pgqrs_adapter;
 mod queue;
 mod types;
 
@@ -19,7 +19,4 @@ pub use inspect::{
     ListQueuesRequest, MetricsAllRequest, MetricsRequest,
 };
 pub use queue::{Consumer, Producer, QueueHandle};
-pub use types::{
-    ArchivedMessage, ConsumerInfo, Message, MessageState, ProducerInfo, QueueInfo, QueueMetrics,
-    ReceiptHandle,
-};
+pub use types::{ArchivedMessage, Message, MessageState, QueueInfo, QueueMetrics, ReceiptHandle};

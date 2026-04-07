@@ -111,7 +111,7 @@ If processing takes longer than expected, extend the lease before it expires:
 use std::time::Duration;
 
 async fn extend_processing(
-    consumer: &s3q::Consumer<'_>,
+    consumer: &s3q::Consumer,
     receipt: s3q::ReceiptHandle,
 ) -> s3q::Result<()> {
     consumer.set_vt(receipt, Duration::from_secs(120)).await?;

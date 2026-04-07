@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    config::ClientConfig, inspect::Inspect, pgqrs::PgqrsAdapter, queue::QueueHandle, Result,
+    config::ClientConfig, inspect::Inspect, pgqrs_adapter::PgqrsAdapter, queue::QueueHandle, Result,
 };
 
 #[derive(Debug, Clone)]
@@ -24,12 +24,8 @@ impl Client {
         &self.config
     }
 
-    pub(crate) fn adapter(&self) -> &PgqrsAdapter {
-        &self.adapter
-    }
-
-    pub fn queue(&self, name: impl Into<String>) -> QueueHandle<'_> {
-        QueueHandle::new(self, name)
+    pub fn queue(&self, name: impl Into<String>) -> QueueHandle {
+        QueueHandle::new(self.adapter.clone(), name, self.config.namespace.clone())
     }
 
     pub fn inspect(&self) -> Inspect<'_> {

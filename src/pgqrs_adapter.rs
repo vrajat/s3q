@@ -1,21 +1,20 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::{
-    ClientConfig, ConsumerInfo, Error, Message, MessageState, ProducerInfo, QueueInfo, Result,
-};
+use crate::{ClientConfig, Error, Message, MessageState, QueueInfo, Result};
 use pgqrs::store::s3::S3Store;
 
 #[derive(Debug)]
 pub(crate) struct PgqrsAdapter {
     store: S3Store,
+    admin_worker_name: String,
 }
 
 impl PgqrsAdapter {
     pub(crate) async fn connect(config: &ClientConfig) -> Result<Arc<Self>> {
         if !config.dsn.starts_with("s3://") {
             return Err(Error::InvalidArgument(
-                "s3q v1 only supports s3:// DSNs backed by pgqrs S3Store".to_string(),
+                "s3q v1 only supports s3:// DSNs".to_string(),
             ));
         }
 
@@ -23,11 +22,17 @@ impl PgqrsAdapter {
         let store = S3Store::new(&pgqrs_config).await?;
         pgqrs::admin(&store).install().await?;
 
-        Ok(Arc::new(Self { store }))
+        Ok(Arc::new(Self {
+            store,
+            admin_worker_name: format!("{}-admin", config.service_name),
+        }))
     }
 
     pub(crate) async fn create_queue(&self, queue_name: &str) -> Result<QueueInfo> {
-        let record = pgqrs::admin(&self.store).create_queue(queue_name).await?;
+        let record = pgqrs::admin(&self.store)
+            .name(&self.admin_worker_name)
+            .create_queue(queue_name)
+            .await?;
         Ok(QueueInfo {
             name: record.queue_name,
         })
@@ -35,60 +40,41 @@ impl PgqrsAdapter {
 
     pub(crate) async fn delete_queue(&self, queue_name: &str) -> Result<()> {
         pgqrs::admin(&self.store)
+            .name(&self.admin_worker_name)
             .delete_queue_by_name(queue_name)
             .await?;
         Ok(())
     }
 
     pub(crate) async fn purge_queue(&self, queue_name: &str) -> Result<()> {
-        pgqrs::admin(&self.store).purge_queue(queue_name).await?;
+        pgqrs::admin(&self.store)
+            .name(&self.admin_worker_name)
+            .purge_queue(queue_name)
+            .await?;
         Ok(())
     }
 
-    pub(crate) async fn producer(
-        &self,
-        queue_name: &str,
-        worker_id: &str,
-    ) -> Result<BoundProducer> {
+    pub(crate) async fn producer(&self, queue_name: &str, worker_id: &str) -> Result<Producer> {
         let producer = pgqrs::producer(worker_id, queue_name)
             .create(&self.store)
             .await?;
-        let info = ProducerInfo {
-            queue_name: queue_name.to_string(),
-            worker_id: worker_id.to_string(),
-        };
-
-        Ok(BoundProducer { producer, info })
+        Ok(Producer { producer })
     }
 
-    pub(crate) async fn consumer(
-        &self,
-        queue_name: &str,
-        worker_id: &str,
-    ) -> Result<BoundConsumer> {
+    pub(crate) async fn consumer(&self, queue_name: &str, worker_id: &str) -> Result<Consumer> {
         let consumer = pgqrs::consumer(worker_id, queue_name)
             .create(&self.store)
             .await?;
-        let info = ConsumerInfo {
-            queue_name: queue_name.to_string(),
-            worker_id: worker_id.to_string(),
-        };
-
-        Ok(BoundConsumer { consumer, info })
+        Ok(Consumer { consumer })
     }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct BoundProducer {
+pub(crate) struct Producer {
     producer: pgqrs::Producer,
-    info: ProducerInfo,
 }
 
-impl BoundProducer {
-    pub(crate) fn info(&self) -> &ProducerInfo {
-        &self.info
-    }
-
+impl Producer {
     pub(crate) async fn send(
         &self,
         payload: serde_json::Value,
@@ -114,16 +100,11 @@ impl BoundProducer {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct BoundConsumer {
+pub(crate) struct Consumer {
     consumer: pgqrs::Consumer,
-    info: ConsumerInfo,
 }
 
-impl BoundConsumer {
-    pub(crate) fn info(&self) -> &ConsumerInfo {
-        &self.info
-    }
-
+impl Consumer {
     pub(crate) async fn read(&self, vt: Duration) -> Result<Option<Message>> {
         let mut messages = self.read_batch(vt, 1).await?;
         Ok(messages.pop())
