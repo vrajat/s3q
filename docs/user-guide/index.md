@@ -1,34 +1,37 @@
 # User Guide
 
-s3q has two product surfaces:
+s3q has two v1 product surfaces:
 
-1. **Queues**
-2. **Workflows**
+1. **Queue APIs** for sending, reading, leasing, deleting, and archiving messages.
+2. **Inspection APIs** for read-only metrics and message inspection.
 
-They share infrastructure and storage, but they should remain conceptually separate.
+Both surfaces are backed by `pgqrs::store::s3::S3Store`.
 
 ## Queue Surface
 
-Queues should feel familiar to teams that already understand SQS:
+Queues use `pgmq`-style names:
 
-- `send_message`
-- `send_message_batch`
-- `receive_messages`
+- `send`
+- `send_batch`
+- `read`
+- `read_batch`
+- `read_with_poll`
 - `delete_message`
-- `change_message_visibility`
+- `archive_message`
+- `archive_messages`
+- `set_vt`
 
 The core semantic is **lease then ack**, not destructive pop.
 
-## Workflow Surface
+## Inspection Surface
 
-Workflows should feel familiar to teams that already understand Temporal:
+Inspection is read-only and operational:
 
-- `start_workflow`
-- `describe_workflow`
-- `signal`
-- `query`
-- `result`
-- `cancel`
-- `terminate`
+- `list_queues`
+- `metrics`
+- `metrics_all`
+- `list_messages`
+- `get_message`
+- `list_archived_messages`
 
-The core semantic is **durable execution over persisted state**.
+Metrics should follow `pgqrs` semantics and are exact snapshots of durable queue state.
