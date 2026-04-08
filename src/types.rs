@@ -74,6 +74,37 @@ impl std::fmt::Display for ReceiptHandle {
     }
 }
 
+/// Convert a pgqrs queue message into an s3q message.
+pub(crate) fn message_from_pgqrs(
+    message: pgqrs::QueueMessage,
+    receipt_handle: Option<ReceiptHandle>,
+) -> Message {
+    let state = message_state(&message);
+    Message {
+        message_id: message.id,
+        read_count: message.read_ct.max(0) as u32,
+        enqueued_at: SystemTime::from(message.enqueued_at),
+        visible_at: SystemTime::from(message.vt),
+        payload: message.payload,
+        receipt_handle,
+        state,
+    }
+}
+
+/// Project pgqrs message fields into the public s3q message state.
+pub(crate) fn message_state(message: &pgqrs::QueueMessage) -> MessageState {
+    let now = SystemTime::now();
+    if message.archived_at.is_some() {
+        MessageState::Archived
+    } else if message.consumer_worker_id.is_some() {
+        MessageState::Leased
+    } else if SystemTime::from(message.vt) > now {
+        MessageState::Delayed
+    } else {
+        MessageState::Visible
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Public message state.
 pub enum MessageState {
@@ -110,6 +141,15 @@ pub struct Message {
 pub type ArchivedMessage = Message;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Queue returned by inspection APIs.
+pub struct QueueSummary {
+    /// Queue name.
+    pub queue_name: String,
+    /// Time when the queue was created.
+    pub created_at: SystemTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Metrics snapshot for a queue.
 pub struct QueueMetrics {
     /// Queue name.
@@ -124,4 +164,13 @@ pub struct QueueMetrics {
     pub archived_messages: u64,
     /// Total number of messages included in the snapshot.
     pub total_messages: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// One page of inspected messages.
+pub struct MessagePage {
+    /// Messages returned for this page.
+    pub messages: Vec<Message>,
+    /// Cursor to pass to the next request, if more messages may be available.
+    pub next_cursor: Option<String>,
 }

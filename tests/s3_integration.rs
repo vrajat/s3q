@@ -165,6 +165,7 @@ async fn producers_consumers_and_completion_work_end_to_end() {
         .expect("archive should succeed")
         .expect("archive should return the archived message");
     assert_eq!(archived.state, s3q::MessageState::Archived);
+    let archived_message_id = archived.message_id;
 
     let set_vt_handle = messages
         .pop()
@@ -206,6 +207,63 @@ async fn producers_consumers_and_completion_work_end_to_end() {
         .await
         .expect("archived messages should be retained");
     assert_eq!(archived_messages.len(), 2);
+
+    let inspect = client.inspect();
+    let queues = inspect
+        .list_queues()
+        .await
+        .expect("queues should be inspectable");
+    assert!(queues.iter().any(|queue| queue.queue_name == queue_name));
+
+    let metrics = inspect
+        .metrics(&queue_name)
+        .await
+        .expect("queue metrics should be inspectable");
+    assert_eq!(metrics.queue_name, queue_name);
+    assert_eq!(metrics.visible_messages, 0);
+    assert_eq!(metrics.leased_messages, 0);
+    assert_eq!(metrics.delayed_messages, 0);
+    assert_eq!(metrics.archived_messages, 2);
+    assert_eq!(metrics.total_messages, 2);
+
+    let all_metrics = inspect
+        .metrics_all()
+        .await
+        .expect("all queue metrics should be inspectable");
+    assert!(all_metrics
+        .iter()
+        .any(|metrics| metrics.queue_name == queue_name && metrics.archived_messages == 2));
+
+    let inspected_archived = inspect
+        .get_message(&queue_name, archived_message_id)
+        .await
+        .expect("archived message should be inspectable by id");
+    assert_eq!(inspected_archived.state, s3q::MessageState::Archived);
+
+    let archived_page = inspect
+        .list_archived_messages(&queue_name)
+        .with_limit(1)
+        .execute()
+        .await
+        .expect("archived messages should be listable");
+    assert_eq!(archived_page.messages.len(), 1);
+    assert!(archived_page.next_cursor.is_some());
+
+    let second_archived_page = inspect
+        .list_archived_messages(&queue_name)
+        .with_cursor(archived_page.next_cursor.expect("next cursor should exist"))
+        .execute()
+        .await
+        .expect("archived cursor should be usable");
+    assert_eq!(second_archived_page.messages.len(), 1);
+
+    let archived_from_messages = inspect
+        .list_messages(&queue_name)
+        .with_state(s3q::MessageState::Archived)
+        .execute()
+        .await
+        .expect("archived messages should be listable through state filter");
+    assert_eq!(archived_from_messages.messages.len(), 2);
 }
 
 #[tokio::test]

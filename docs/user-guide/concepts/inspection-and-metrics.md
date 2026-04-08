@@ -32,7 +32,9 @@ let leased = client
     .inspect()
     .list_messages("emails")
     .with_state(s3q::MessageState::Leased)
-    .with_limit(100);
+    .with_limit(100)
+    .execute()
+    .await?;
 ```
 
 Archived messages are retained separately from active queue state:
@@ -41,5 +43,28 @@ Archived messages are retained separately from active queue state:
 let archived = client
     .inspect()
     .list_archived_messages("emails")
-    .with_limit(100);
+    .with_limit(100)
+    .execute()
+    .await?;
+```
+
+List queues and metrics directly:
+
+```rust
+let queues = client.inspect().list_queues().await?;
+let metrics = client.inspect().metrics("emails").await?;
+let all_metrics = client.inspect().metrics_all().await?;
+```
+
+Use the returned `next_cursor` for the next page:
+
+```rust
+if let Some(cursor) = archived.next_cursor {
+    let next = client
+        .inspect()
+        .list_archived_messages("emails")
+        .with_cursor(cursor)
+        .execute()
+        .await?;
+}
 ```
