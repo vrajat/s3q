@@ -24,7 +24,6 @@ serde_json = "1.0"
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 
-# For local pgqrs development, temporarily uncomment:
-#
-# [patch.crates-io]
-# pgqrs = { path = "../pgqrs/crates/pgqrs" }
+# Temporary local override while bounded dequeue polling is under review upstream.
+[patch.crates-io]
+pgqrs = { path = "../pgqrs/crates/pgqrs" }

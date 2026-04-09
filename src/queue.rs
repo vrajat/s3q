@@ -69,6 +69,7 @@ impl Queue {
             .await?;
 
         Ok(Consumer {
+            store: self.store.clone(),
             queue_name: self.name.clone(),
             namespace: self.namespace.clone(),
             worker_id,
@@ -158,6 +159,7 @@ impl Producer {
 #[derive(Debug, Clone)]
 /// Consumer handle for leasing and completing messages from one queue.
 pub struct Consumer {
+    store: Arc<StoreState>,
     queue_name: String,
     namespace: String,
     worker_id: String,
@@ -203,8 +205,8 @@ impl Consumer {
 
     /// Long-poll for visible messages.
     ///
-    /// This API is reserved for the polling phase and currently returns
-    /// [`Error::NotImplemented`](crate::Error::NotImplemented).
+    /// The consumer waits up to `poll_timeout` for visible messages. If the
+    /// timeout expires first, this returns an empty vector.
     pub async fn read_with_poll(
         &self,
         vt: Duration,
@@ -212,10 +214,23 @@ impl Consumer {
         poll_timeout: Duration,
         poll_interval: Duration,
     ) -> Result<Vec<Message>> {
-        let _ = (vt, qty, poll_timeout, poll_interval);
-        Err(crate::Error::NotImplemented(
-            "read_with_poll is wired in Phase 4 using pgqrs polling support",
-        ))
+        let worker_id = self.consumer.worker_id();
+        let messages = pgqrs::dequeue()
+            .worker(&self.consumer)
+            .batch(qty)
+            .with_vt(vt)
+            .poll_interval(poll_interval)
+            .until(poll_timeout)
+            .poll(&self.store.s3)
+            .await?;
+
+        Ok(messages
+            .into_iter()
+            .map(|message| {
+                let receipt_handle = Some(ReceiptHandle::from_parts(message.id, worker_id));
+                message_from_pgqrs(message, receipt_handle)
+            })
+            .collect())
     }
 
     /// Permanently delete a leased message.

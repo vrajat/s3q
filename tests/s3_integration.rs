@@ -300,3 +300,82 @@ async fn delayed_send_is_not_visible_until_delay_expires() {
         .expect("read should succeed");
     assert!(messages.is_empty(), "delayed message should not be visible");
 }
+
+#[tokio::test]
+#[ignore = "requires LocalStack; run with `make test-localstack`"]
+async fn read_with_poll_returns_empty_when_timeout_expires() {
+    prepare_localstack_tls_env();
+    let client = s3q::Client::connect_with_config(
+        s3q::ClientConfig::new(unique_dsn("s3q-poll-timeout")).with_namespace("s3q_test"),
+    )
+    .await
+    .expect("client should connect");
+
+    let queue = client
+        .create_queue(unique_name("poll-timeout"))
+        .await
+        .expect("queue should be created");
+    let consumer = queue
+        .consumer("worker-a")
+        .await
+        .expect("consumer should be created");
+
+    let messages = consumer
+        .read_with_poll(
+            Duration::from_secs(30),
+            1,
+            Duration::from_millis(200),
+            Duration::from_millis(25),
+        )
+        .await
+        .expect("bounded poll should succeed");
+
+    assert!(
+        messages.is_empty(),
+        "bounded poll should return empty on timeout"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires LocalStack; run with `make test-localstack`"]
+async fn read_with_poll_returns_message_before_timeout() {
+    prepare_localstack_tls_env();
+    let client = s3q::Client::connect_with_config(
+        s3q::ClientConfig::new(unique_dsn("s3q-poll-message")).with_namespace("s3q_test"),
+    )
+    .await
+    .expect("client should connect");
+
+    let queue = client
+        .create_queue(unique_name("poll-message"))
+        .await
+        .expect("queue should be created");
+    let producer = queue
+        .producer("api-worker")
+        .await
+        .expect("producer should be created");
+    let consumer = queue
+        .consumer("worker-a")
+        .await
+        .expect("consumer should be created");
+
+    producer
+        .send(json!({ "kind": "poll", "n": 1 }))
+        .await
+        .expect("message should enqueue");
+
+    let messages = consumer
+        .read_with_poll(
+            Duration::from_secs(30),
+            1,
+            Duration::from_secs(5),
+            Duration::from_millis(25),
+        )
+        .await
+        .expect("bounded poll should succeed");
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].payload, json!({ "kind": "poll", "n": 1 }));
+    assert_eq!(messages[0].state, s3q::MessageState::Leased);
+    assert!(messages[0].receipt_handle.is_some());
+}

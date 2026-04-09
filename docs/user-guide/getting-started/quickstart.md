@@ -124,7 +124,7 @@ Inspection APIs are read-only. They never lease, archive, or delete messages.
 
 ```rust
 async fn show_metrics(client: &s3q::Client) -> s3q::Result<()> {
-    let metrics = client.inspect().metrics("emails");
+    let metrics = client.inspect().metrics("emails").await?;
     println!("{metrics:?}");
     Ok(())
 }

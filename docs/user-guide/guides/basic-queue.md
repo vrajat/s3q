@@ -73,4 +73,32 @@ async fn worker_loop(client: s3q::Client) -> s3q::Result<()> {
 async fn wait_for_more_work(_duration: Duration) {}
 ```
 
-Use `read_with_poll` when you want the worker to wait for messages instead of sleeping between empty reads.
+Use `read_with_poll` when you want the worker to wait for messages instead of sleeping between empty reads:
+
+```rust
+use std::time::Duration;
+
+async fn worker_loop(client: s3q::Client) -> s3q::Result<()> {
+    let queue = client.queue("emails");
+    let consumer = queue.consumer("email-worker-1").await?;
+
+    loop {
+        let messages = consumer
+            .read_with_poll(
+                Duration::from_secs(30),
+                25,
+                Duration::from_secs(20),
+                Duration::from_millis(250),
+            )
+            .await?;
+
+        for message in messages {
+            if let Some(receipt) = message.receipt_handle {
+                consumer.archive_message(receipt).await?;
+            }
+        }
+    }
+}
+```
+
+If the poll timeout expires without work, `read_with_poll` returns an empty vector and the loop can continue immediately.
