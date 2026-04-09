@@ -15,8 +15,6 @@ class ServiceConfig:
     """Logical namespace used for queues."""
     queue_poll_interval_ms: int = 500
     """Queue polling interval in milliseconds."""
-    workflow_poll_interval_ms: int = 500
-    """Workflow polling interval in milliseconds."""
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ServiceConfig":
@@ -28,6 +26,7 @@ class ServiceConfig:
 
 def run_service(config: ServiceConfig) -> None:
     """Run the service scaffold."""
+    _ = config
     raise RuntimeError(
         "service runner is scaffolded but not implemented; wire it to the Rust core first"
     )

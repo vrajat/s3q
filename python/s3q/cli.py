@@ -19,16 +19,6 @@ def build_parser() -> argparse.ArgumentParser:
     queue_create.add_argument("--dsn", required=True)
     queue_create.add_argument("--name", required=True)
 
-    workflow = subparsers.add_parser("workflow")
-    workflow_subparsers = workflow.add_subparsers(
-        dest="workflow_command", required=True
-    )
-    workflow_start = workflow_subparsers.add_parser("start")
-    workflow_start.add_argument("--dsn", required=True)
-    workflow_start.add_argument("--name", required=True)
-    workflow_start.add_argument("--workflow-id", required=True)
-    workflow_start.add_argument("--input", default="{}")
-
     service = subparsers.add_parser("service")
     service_subparsers = service.add_subparsers(dest="service_command", required=True)
     service_run = service_subparsers.add_parser("run")
@@ -46,11 +36,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "queue" and args.queue_command == "create":
             client = Client.connect(args.dsn)
             client.create_queue(args.name)
-            return 0
-
-        if args.command == "workflow" and args.workflow_command == "start":
-            client = Client.connect(args.dsn)
-            client.workflow(args.name).start(args.workflow_id, args.input)
             return 0
 
         if args.command == "service" and args.service_command == "run":
