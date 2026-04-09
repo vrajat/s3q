@@ -19,7 +19,6 @@
 ## First Good Contributions
 
 - Implement inspection metrics.
-- Wire `read_with_poll`.
 - Add queue-only examples for Rust and Python.
 - Add end-to-end tests against local object storage.
 - Improve docs with runnable application examples.

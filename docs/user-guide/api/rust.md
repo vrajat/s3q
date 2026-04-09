@@ -105,7 +105,7 @@ consumer
     .await?;
 ```
 
-Use `read_with_poll` for long polling once the polling API is enabled:
+Use `read_with_poll` when you want the consumer to wait for visible work before returning:
 
 ```rust
 let messages = consumer
@@ -117,6 +117,8 @@ let messages = consumer
     )
     .await?;
 ```
+
+If no messages become visible before `poll_timeout`, `read_with_poll` returns an empty vector.
 
 ## Message
 

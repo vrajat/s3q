@@ -42,7 +42,7 @@ let client = s3q::Client::connect_with_config(config).await?;
 | --- | --- |
 | `consumer.read(vt).await` | Lease one visible message |
 | `consumer.read_batch(vt, qty).await` | Lease up to `qty` visible messages |
-| `consumer.read_with_poll(vt, qty, timeout, interval).await` | Long-poll for visible messages |
+| `consumer.read_with_poll(vt, qty, timeout, interval).await` | Long-poll for visible messages and return an empty batch on timeout |
 | `consumer.archive_message(receipt).await` | Complete and retain a message |
 | `consumer.archive_messages(receipts).await` | Complete and retain multiple messages |
 | `consumer.delete_message(receipt).await` | Permanently remove a message |

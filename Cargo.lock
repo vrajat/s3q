@@ -2028,8 +2028,6 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "pgqrs"
 version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d6efd24b639f425c938fd77a9022081b8c67a332197de2ba40c77acbef547fe"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2058,8 +2056,6 @@ dependencies = [
 [[package]]
 name = "pgqrs-macros"
 version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cb7185fb8abada7828d4956d6b8ee045e72e89d88f23d510bf8815312aa1b6a"
 dependencies = [
  "quote",
  "syn",
