@@ -2,6 +2,19 @@
 
 The CLI is an operational wrapper around the Python SDK.
 
+## Implemented Commands
+
+These commands are currently implemented:
+
+```bash
+s3q queue create --dsn <dsn> --name <queue>
+s3q service run --config <config-path>
+```
+
+## Target Queue Surface
+
+As the CLI grows, it should mirror the same queue vocabulary as the SDKs.
+
 Command groups:
 
 - `s3q queue`
@@ -26,4 +39,4 @@ s3q inspect messages emails --state leased --limit 100
 s3q inspect archived emails --limit 100
 ```
 
-Availability: the CLI is not ready for application use yet.
+Availability: the CLI surface is still incomplete and is not ready for general application use yet.

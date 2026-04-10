@@ -1,4 +1,4 @@
-# API Reference
+# API
 
 The s3q API is organized around four handles:
 
@@ -8,4 +8,10 @@ The s3q API is organized around four handles:
 - `Consumer`: reads and completes messages
 - `Inspect`: read-only metrics and message inspection
 
-Start with the [Rust API](rust.md). Python and CLI surfaces mirror the same queue terms as they are implemented.
+Use the pages in this section for short, task-oriented examples:
+
+- [Rust](rust.md)
+- [Python](python.md)
+- [CLI](cli.md)
+
+For complete method and command listings, use the pages under `Reference`.
