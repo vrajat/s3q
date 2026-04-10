@@ -1,0 +1,15 @@
+[package]
+name = "s3q-py"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+serde_json = "1.0"
+s3q_rs = { package = "s3q", path = ".." }
+tokio = { version = "1.0", features = ["rt-multi-thread"] }

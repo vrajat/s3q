@@ -2,6 +2,7 @@ CARGO ?= cargo
 PYTHON ?= python3
 UV ?= uv
 ZENSICAL ?= zensical
+PYTHONPYCACHEPREFIX ?= $(CURDIR)/.pycache
 
 LOCALSTACK_IMAGE ?= localstack/localstack:3
 LOCALSTACK_CONTAINER ?= s3q-test-localstack
@@ -15,9 +16,8 @@ fmt:
 
 .PHONY: check
 check:
-	$(CARGO) fmt --all -- --check
-	$(CARGO) check
-	$(PYTHON) -m compileall python
+	$(MAKE) check-rust
+	$(MAKE) check-py
 
 .PHONY: check-rust
 check-rust:
@@ -26,7 +26,9 @@ check-rust:
 
 .PHONY: check-py
 check-py:
-	$(PYTHON) -m compileall python
+	$(CARGO) fmt --manifest-path python/Cargo.toml --all -- --check
+	$(CARGO) check --manifest-path python/Cargo.toml
+	PYTHONPYCACHEPREFIX="$(PYTHONPYCACHEPREFIX)" $(PYTHON) -m compileall python/s3q python/tests
 
 .PHONY: test
 test:
@@ -91,7 +93,12 @@ test-s3: test-localstack
 
 .PHONY: test-py
 test-py:
-	$(PYTHON) -m compileall python
+	PYTHONPYCACHEPREFIX="$(PYTHONPYCACHEPREFIX)" $(PYTHON) -m compileall python/s3q python/tests
+	PYTHONPATH=python $(PYTHON) -m unittest discover -s python/tests -p 'test_*.py'
+
+.PHONY: build-py
+build-py:
+	$(UV) run --with maturin maturin develop --manifest-path python/Cargo.toml
 
 .PHONY: docs-build
 docs-build:

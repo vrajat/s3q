@@ -1,43 +1,35 @@
+"""Queue handle for the Python s3q SDK."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .errors import NotReadyError
+from .consumer import Consumer
+from .errors import translate_native_error
+from .producer import Producer
 
 
-@dataclass(slots=True)
+@dataclass
 class Queue:
-    """Queue-scoped Python API scaffold."""
+    """Queue-scoped handle used to create producer and consumer handles."""
 
     client: object
-    """Client that created this queue handle."""
     name: str
-    """Queue name."""
+    namespace: str
+    native_client: object
 
-    def send_message(self, payload: bytes | str) -> None:
-        """Send one message payload."""
-        _ = payload
-        raise NotReadyError("queue.send_message is not wired to the Rust core yet")
+    def producer(self, worker_id: str) -> Producer:
+        """Create a managed producer handle for this queue."""
+        try:
+            native = self.native_client.producer(self.name, worker_id)
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return Producer.from_native(native)
 
-    def receive_messages(self, *, max_messages: int = 1) -> None:
-        """Receive leased messages."""
-        _ = max_messages
-        raise NotReadyError("queue.receive_messages is not wired to the Rust core yet")
-
-    def delete_message(self, receipt_handle: str) -> None:
-        """Delete a leased message by receipt handle."""
-        _ = receipt_handle
-        raise NotReadyError("queue.delete_message is not wired to the Rust core yet")
-
-    def change_message_visibility(
-        self,
-        receipt_handle: str,
-        *,
-        visibility_timeout_seconds: int,
-    ) -> None:
-        """Change the visibility timeout for a leased message."""
-        _ = receipt_handle
-        _ = visibility_timeout_seconds
-        raise NotReadyError(
-            "queue.change_message_visibility is not wired to the Rust core yet"
-        )
+    def consumer(self, worker_id: str) -> Consumer:
+        """Create a managed consumer handle for this queue."""
+        try:
+            native = self.native_client.consumer(self.name, worker_id)
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return Consumer.from_native(native)

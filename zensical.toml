@@ -19,6 +19,8 @@ nav = [
     {"API" = [
       "user-guide/api/index.md",
       {"Rust" = "user-guide/api/rust.md"},
+      {"Python" = "user-guide/api/python.md"},
+      {"CLI" = "user-guide/api/cli.md"},
     ]},
     {"Guides" = [
       "user-guide/guides/index.md",
