@@ -7,6 +7,7 @@ from .errors import (
     MessageNotFoundError,
     NotReadyError,
     OwnershipMismatchError,
+    QueueNotFoundError,
     S3QError,
 )
 from .inspect import Inspect, ListArchivedMessagesRequest, ListMessagesRequest
@@ -31,6 +32,7 @@ __all__ = [
     "Producer",
     "Queue",
     "QueueMetrics",
+    "QueueNotFoundError",
     "QueueSummary",
     "ReceiptHandle",
     "S3QError",

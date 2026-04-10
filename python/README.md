@@ -11,4 +11,10 @@ The Python SDK is intentionally queue-only and mirrors the Rust concepts:
 - `Inspect`
 - `Message`, `ReceiptHandle`, `QueueMetrics`, and related types
 
-Today the surface exists primarily to lock the vocabulary and public shapes. The queue methods are not wired to the Rust core yet, and real queue operations should still use the Rust API.
+The Python methods are implemented as a thin wrapper over a native Rust extension module.
+
+Current status:
+
+- the queue-only Python API is implemented
+- the package expects the native extension to be built before use
+- the CLI and service layers still follow after the SDK

@@ -1,4 +1,5 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -24,7 +25,7 @@ impl StoreState {
         }
 
         let mut pgqrs_config = pgqrs::Config::from_dsn_with_schema(&config.dsn, &config.namespace)?;
-        pgqrs_config.s3.cache_id = s3_cache_id(config);
+        pgqrs_config.s3.cache_dir = Some(s3_cache_dir(config));
         let store = S3Store::new(&pgqrs_config).await?;
         store.bootstrap().await?;
 
@@ -35,7 +36,11 @@ impl StoreState {
     }
 }
 
-fn s3_cache_id(config: &ClientConfig) -> String {
+fn s3_cache_dir(config: &ClientConfig) -> PathBuf {
+    if let Some(path) = &config.local_cache_dir {
+        return PathBuf::from(path);
+    }
+
     let mut hasher = DefaultHasher::new();
     config.dsn.hash(&mut hasher);
     config.namespace.hash(&mut hasher);
@@ -48,21 +53,32 @@ fn s3_cache_id(config: &ClientConfig) -> String {
         .unwrap_or(0);
     let sequence = NEXT_CACHE_ID.fetch_add(1, Ordering::Relaxed);
 
-    format!(
+    std::env::temp_dir().join(format!(
         "s3q-{}-{timestamp}-{sequence}-{fingerprint:x}",
         std::process::id()
-    )
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::s3_cache_id;
+    use super::s3_cache_dir;
     use crate::ClientConfig;
 
     #[test]
-    fn s3_cache_ids_are_unique_per_connection() {
+    fn s3_cache_dirs_are_unique_per_connection() {
         let config = ClientConfig::new("s3://bucket/queue.sqlite");
 
-        assert_ne!(s3_cache_id(&config), s3_cache_id(&config));
+        assert_ne!(s3_cache_dir(&config), s3_cache_dir(&config));
+    }
+
+    #[test]
+    fn s3_cache_dir_uses_explicit_local_cache_dir() {
+        let config =
+            ClientConfig::new("s3://bucket/queue.sqlite").with_local_cache_dir("/tmp/s3q-cache");
+
+        assert_eq!(
+            s3_cache_dir(&config),
+            std::path::PathBuf::from("/tmp/s3q-cache")
+        );
     }
 }

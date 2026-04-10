@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .errors import NotReadyError
-from .types import Message, MessagePage, MessageState, QueueMetrics, QueueSummary
+from .errors import translate_native_error
+from .types import (
+    Message,
+    MessagePage,
+    MessageState,
+    QueueMetrics,
+    QueueSummary,
+    message_from_native,
+    message_page_from_native,
+    queue_metrics_from_native,
+    queue_summary_from_native,
+)
 
 
-@dataclass(slots=True)
+@dataclass
 class ListMessagesRequest:
     """Read-only builder for filtered message listing."""
 
@@ -35,11 +45,19 @@ class ListMessagesRequest:
 
     def execute(self) -> MessagePage:
         """Run the listing request."""
-        _ = (self.queue_name, self.state, self.limit, self.cursor)
-        raise NotReadyError("inspect.list_messages is not wired to the Rust core yet")
+        try:
+            result = self.inspect.client._native.list_messages(
+                self.queue_name,
+                state=self.state.value if self.state is not None else None,
+                limit=self.limit,
+                cursor=self.cursor,
+            )
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return message_page_from_native(result)
 
 
-@dataclass(slots=True)
+@dataclass
 class ListArchivedMessagesRequest:
     """Read-only builder for archived message listing."""
 
@@ -60,13 +78,18 @@ class ListArchivedMessagesRequest:
 
     def execute(self) -> MessagePage:
         """Run the archived listing request."""
-        _ = (self.queue_name, self.limit, self.cursor)
-        raise NotReadyError(
-            "inspect.list_archived_messages is not wired to the Rust core yet"
-        )
+        try:
+            result = self.inspect.client._native.list_archived_messages(
+                self.queue_name,
+                limit=self.limit,
+                cursor=self.cursor,
+            )
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return message_page_from_native(result)
 
 
-@dataclass(slots=True)
+@dataclass
 class Inspect:
     """Read-only inspection surface."""
 
@@ -74,21 +97,35 @@ class Inspect:
 
     def list_queues(self) -> list[QueueSummary]:
         """List queues known to the store."""
-        raise NotReadyError("inspect.list_queues is not wired to the Rust core yet")
+        try:
+            result = self.client._native.list_queues()
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return [queue_summary_from_native(item) for item in result]
 
     def metrics(self, queue_name: str) -> QueueMetrics:
         """Return exact metrics for one queue."""
-        _ = queue_name
-        raise NotReadyError("inspect.metrics is not wired to the Rust core yet")
+        try:
+            result = self.client._native.metrics(queue_name)
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return queue_metrics_from_native(result)
 
     def metrics_all(self) -> list[QueueMetrics]:
         """Return exact metrics for all queues."""
-        raise NotReadyError("inspect.metrics_all is not wired to the Rust core yet")
+        try:
+            result = self.client._native.metrics_all()
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return [queue_metrics_from_native(item) for item in result]
 
     def get_message(self, queue_name: str, message_id: int) -> Message:
         """Return one message by id."""
-        _ = (queue_name, message_id)
-        raise NotReadyError("inspect.get_message is not wired to the Rust core yet")
+        try:
+            result = self.client._native.get_message(queue_name, message_id)
+        except Exception as error:
+            raise translate_native_error(error) from error
+        return message_from_native(result)
 
     def list_messages(self, queue_name: str) -> ListMessagesRequest:
         """Start a filtered active-message listing request."""

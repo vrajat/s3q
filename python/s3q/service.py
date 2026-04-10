@@ -5,7 +5,7 @@ from pathlib import Path
 import tomllib
 
 
-@dataclass(slots=True)
+@dataclass
 class ServiceConfig:
     """Configuration for the planned s3q service runner."""
 

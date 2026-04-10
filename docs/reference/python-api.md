@@ -16,8 +16,8 @@ The Python SDK mirrors the Rust queue vocabulary:
 
 Current status:
 
-- the queue-only Python SDK surface is defined
+- the queue-only Python SDK wraps the Rust core through a native extension
 - Python types mirror the Rust concepts
-- the methods are not wired to the Rust core yet
+- the package must be built with its native extension before use
 
-Use the Rust API for real queue operations until the Python package is backed by the Rust core.
+The API shape is intended to match Rust closely while keeping Python-friendly arguments and exceptions.
